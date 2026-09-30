@@ -1,0 +1,61 @@
+name: si_eja
+description: "Aplikasi edukasi anak TK bernama SiEja."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  audioplayers: ^5.2.1
+  go_router: ^13.0.0
+  provider: ^6.1.2
+  shared_preferences: ^2.2.3
+  sqflite: ^2.3.2
+  path: ^1.9.0
+  firebase_core: ^4.12.1
+  firebase_auth: ^6.5.6
+  cloud_firestore: ^6.7.1
+  connectivity_plus: ^7.3.1
+  crypto: ^3.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/background/
+    - assets/images/kata/
+    - assets/images/icons/game/
+    - assets/images/icons/guru/
+    - assets/images/icons/navigasi/
+    - assets/images/icons/beranda/
+    - assets/images/buttons/
+    - assets/images/stage/
+    - assets/images/popup/
+    - assets/images/template/
+    - assets/audio/huruf/
+    - assets/audio/kata/
+    - assets/audio/instruksi/
+    - assets/audio/music/
+    - assets/images/characters/
+    - assets/fonts/
+
+  fonts:
+    - family: Fredoka
+      fonts:
+        - asset: assets/fonts/Fredoka.ttf
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/images/template/logo_aplikasi.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#87CEEB"
+  adaptive_icon_foreground: "assets/images/template/logo_aplikasi.png"

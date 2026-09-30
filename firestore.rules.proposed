@@ -1,0 +1,61 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions
+    function isGuru() {
+      // PERHATIAN: 
+      // Saat ini login siswa tidak menggunakan Firebase Auth. 
+      // Maka, asumsikan auth != null berarti Guru. 
+      // Jika kelak Siswa dibuatkan Firebase Auth (misal Anonymous Login), 
+      // helper ini HARUS disesuaikan menggunakan Custom Claims (request.auth.token.admin == true)
+      // atau dokumen roles.
+      return request.auth != null;
+    }
+
+    function isOnlyModifyingProgress() {
+      // Mengecek apakah operasi update pada dokumen siswa hanya memodifikasi field "progress"
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progress']);
+    }
+
+    // Koleksi login_siswa
+    match /login_siswa/{credentialKey} {
+      // Allow GET tanpa autentikasi agar siswa bisa mencari kredensial saat login
+      allow get: if true;
+      
+      // Mencegah siswa/anonim me-list (query) semua data login
+      allow list: if false;
+
+      // Hanya guru yang boleh memodifikasi kredensial (saat menambah/menghapus siswa)
+      allow create, update, delete: if isGuru();
+    }
+
+    // Koleksi siswa
+    match /siswa/{studentId} {
+      // Mencegah list secara umum untuk yang tidak login.
+      // Hanya Guru yang bisa me-list semua dokumen siswa.
+      allow list: if isGuru();
+      
+      // Allow GET agar siswa bisa memuat datanya berdasarkan siswaId setelah login
+      // Atau bisa digunakan untuk validasi lebih ketat di masa depan
+      allow get: if true;
+
+      // Pembuatan dan penghapusan siswa hanya oleh Guru
+      allow create, delete: if isGuru();
+
+      // Update diizinkan jika dilakukan oleh Guru, ATAU
+      // Jika siswa mengirimkan skor permainan (hanya mengubah field progress)
+      allow update: if isGuru() || isOnlyModifyingProgress();
+    }
+
+    // Koleksi soal
+    match /soal/{questionId} {
+      // Semua orang (termasuk siswa yang main) boleh membaca soal
+      allow get, list: if true;
+
+      // Modifikasi bank soal hanya oleh Guru
+      allow create, update, delete: if isGuru();
+    }
+  }
+}
