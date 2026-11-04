@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:si_eja/core/app_constants.dart';
 import 'package:si_eja/services/audio_service.dart';
-import 'package:si_eja/services/firebase_service.dart';
 import 'package:si_eja/services/progress_service.dart';
 import 'package:si_eja/widgets/asset_button.dart';
 import 'package:si_eja/widgets/bg_scaffold.dart';

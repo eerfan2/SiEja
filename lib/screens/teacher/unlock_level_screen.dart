@@ -7,6 +7,8 @@ import 'package:si_eja/services/firebase_service.dart';
 import 'package:si_eja/services/progress_service.dart';
 import 'package:si_eja/widgets/asset_button.dart';
 import 'package:si_eja/widgets/bg_scaffold.dart';
+import 'package:si_eja/widgets/generic_stage_badge.dart';
+import 'package:si_eja/services/stage_service.dart';
 
 class UnlockLevelScreen extends StatefulWidget {
   const UnlockLevelScreen({super.key});
@@ -34,13 +36,14 @@ class _UnlockLevelScreenState extends State<UnlockLevelScreen> {
     final progressService = ProgressService();
     final currentSiswaId = progressService.currentSiswaId;
 
+    final stageModels = await StageService().getStages();
     final totalStudents = firebaseStudents.length;
 
     List<Map<String, dynamic>> stages = [];
-    for (int i = 1; i <= 6; i++) {
-      final stageId = i;
+    for (final model in stageModels) {
+      final stageId = model.number;
       int completedCount = 0;
-      bool isUnlocked = stageId == 1;
+      bool isUnlocked = stageId == 1 || model.isOpenByTeacher;
       
       for (var s in firebaseStudents) {
         final progressMap = s['progress'] as Map<String, dynamic>? ?? {};
@@ -66,8 +69,8 @@ class _UnlockLevelScreenState extends State<UnlockLevelScreen> {
 
       stages.add({
         'id': stageId,
-        'nama': 'Stage $stageId',
-        'huruf': _getHurufRange(stageId),
+        'nama': model.nama,
+        'huruf': model.huruf.isNotEmpty ? model.huruf : _getHurufRange(stageId),
         'status': isUnlocked ? 'unlocked' : 'locked',
         'completedCount': completedCount,
         'totalStudents': totalStudents,
@@ -452,16 +455,25 @@ class _UnlockLevelScreenState extends State<UnlockLevelScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  // Gambar status
-                                  Image.asset(
-                                    AppImages.stageIcon(status, stage['id'] as int),
-                                    width: isTablet
-                                        ? TabletLayout.unlockStageIconSize
-                                        : 50,
-                                    height: isTablet
-                                        ? TabletLayout.unlockStageIconSize
-                                        : 50,
-                                  ),
+                                  AppImages.hasStageIcon(stage['id'] as int)
+                                      ? Image.asset(
+                                          AppImages.stageIcon(
+                                              status, stage['id'] as int),
+                                          width: isTablet
+                                              ? TabletLayout.unlockStageIconSize
+                                              : 50,
+                                          height: isTablet
+                                              ? TabletLayout.unlockStageIconSize
+                                              : 50,
+                                        )
+                                      : GenericStageBadge(
+                                          stageNumber: stage['id'] as int,
+                                          status: status,
+                                          isTablet: isTablet,
+                                          size: isTablet
+                                              ? TabletLayout.unlockStageIconSize
+                                              : 50,
+                                        ),
                                   SizedBox(width: isTablet ? 16 : 12),
 
                                   // Info stage

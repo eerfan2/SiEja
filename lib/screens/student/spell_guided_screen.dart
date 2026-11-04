@@ -27,7 +27,6 @@ class _SpellGuidedScreenState extends State<SpellGuidedScreen> {
   bool _isComplete = false;
   bool _showSuccess = false;
   int _shakeIndex = -1;
-  List<bool> _shakeList = [];
 
   @override
   void initState() {
@@ -36,8 +35,6 @@ class _SpellGuidedScreenState extends State<SpellGuidedScreen> {
     _isComplete = false;
     _showSuccess = false;
     _shakeIndex = -1;
-    _shakeList = List.generate(
-      widget.kata.length, (_) => false);
     AudioService().stopBGM();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future.delayed(const Duration(milliseconds: 300));
@@ -81,6 +78,7 @@ class _SpellGuidedScreenState extends State<SpellGuidedScreen> {
   }
 
   void _onComplete() {
+    if (_showSuccess) return; // Mencegah pemanggilan ganda feedback
     // Mainkan suara instruksi random (feedback_benar, feedback_benar2, feedback_benar3)
     final random = Random();
     final feedbacks = [
@@ -254,13 +252,25 @@ class _SpellGuidedScreenState extends State<SpellGuidedScreen> {
                             ),
                             child: Center(
                               child: isFilledByUser
-                                  ? Text(
-                                      _userAnswer[i].toUpperCase(),
-                                      style: TextStyle(
-                                        fontSize: isTablet ? 40 : 22,
-                                        fontWeight: FontWeight.bold,
-                                        fontFamily: 'Fredoka',
-                                        color: Colors.white,
+                                  ? TweenAnimationBuilder<double>(
+                                      key: ValueKey<String>('guided_slot_${i}_${_userAnswer[i]}'),
+                                      tween: Tween<double>(begin: 0.6, end: 1.0),
+                                      duration: const Duration(milliseconds: 200),
+                                      curve: Curves.easeOutBack,
+                                      builder: (context, scale, child) {
+                                        return Transform.scale(
+                                          scale: scale,
+                                          child: child,
+                                        );
+                                      },
+                                      child: Text(
+                                        _userAnswer[i].toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: isTablet ? 40 : 22,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'Fredoka',
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     )
                                   : Text(
@@ -365,13 +375,18 @@ class _SpellGuidedScreenState extends State<SpellGuidedScreen> {
                 right: 18,
                 child: GestureDetector(
                   onTap: _isComplete ? _onComplete : null,
-                  child: AnimatedOpacity(
-                    opacity: _isComplete ? 1.0 : 0.4,
-                    duration: const Duration(milliseconds: 300),
-                    child: Image.asset(
-                      AppImages.icCorrect,
-                      width: isTablet ? 90 : 60,
-                      height: isTablet ? 90 : 60,
+                  child: AnimatedScale(
+                    scale: _isComplete ? 1.08 : 1.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutBack,
+                    child: AnimatedOpacity(
+                      opacity: _isComplete ? 1.0 : 0.4,
+                      duration: const Duration(milliseconds: 300),
+                      child: Image.asset(
+                        AppImages.icCorrect,
+                        width: isTablet ? 90 : 60,
+                        height: isTablet ? 90 : 60,
+                      ),
                     ),
                   ),
                 ),

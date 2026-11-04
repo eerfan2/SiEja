@@ -29,6 +29,12 @@ class AppImages {
   static const String btnLoginPressed = 'assets/images/buttons/btn_login_pressed.png';
   static const String btnCheckNormal = 'assets/images/buttons/btn_check_normal.png';
   static const String btnCheckPressed = 'assets/images/buttons/btn_check_pressed.png';
+  static const String btnJawabNormal = 'assets/images/buttons/btn_jawab_normal.png';
+  static const String btnJawabPressed = 'assets/images/buttons/btn_jawab_present.png';
+  static const String btnLanjutNormal = 'assets/images/buttons/btn_lanjut_normal.png';
+  static const String btnLanjutPressed = 'assets/images/buttons/btn_lanjut_present.png';
+  static const String btnKembaliBulatNormal = 'assets/images/buttons/btn_kembalibulat_normal.png';
+  static const String btnKembaliBulatPressed = 'assets/images/buttons/btn_kembalibulat_present.png';
   static const String btnDeleteNormal = 'assets/images/buttons/btn_delete_normal.png';
   static const String btnDeletePressed = 'assets/images/buttons/btn_delete_pressed.png';
   static const String btnExitNormal = 'assets/images/buttons/btn_exit_normal.png';
@@ -84,12 +90,28 @@ class AppImages {
   static const String icAddStudent = 'assets/images/icons/guru/ic_add_student.png';
 
   // Stage icons (per nomor stage 1–6)
-  static String stageLocked(int stageId) =>
-      'assets/images/stage/stage_locked_$stageId.png';
-  static String stageUnlocked(int stageId) =>
-      'assets/images/stage/stage_unlocked_$stageId.png';
-  static String stageCompleted(int stageId) =>
-      'assets/images/stage/stage_completed_$stageId.png';
+  static bool hasStageIcon(int stageId) => stageId >= 1 && stageId <= 6;
+
+  // Blank templates untuk stage dinamis > 6 (tanpa angka bawaan)
+  static const String stageLockedBlank = 'assets/images/stage/stage_locked_blank.png';
+  static const String stageUnlockedBlank = 'assets/images/stage/stage_unlocked_blank.png';
+  static const String stageCompletedBlank = 'assets/images/stage/stage_completed_blank.png';
+
+  static String stageLocked(int stageId) {
+    final id = (stageId >= 1 && stageId <= 6) ? stageId : 6;
+    return 'assets/images/stage/stage_locked_$id.png';
+  }
+
+  static String stageUnlocked(int stageId) {
+    final id = (stageId >= 1 && stageId <= 6) ? stageId : 6;
+    return 'assets/images/stage/stage_unlocked_$id.png';
+  }
+
+  static String stageCompleted(int stageId) {
+    final id = (stageId >= 1 && stageId <= 6) ? stageId : 6;
+    return 'assets/images/stage/stage_completed_$id.png';
+  }
+
   static String stageIcon(String status, int stageId) {
     if (status == 'completed') return stageCompleted(stageId);
     if (status == 'unlocked') return stageUnlocked(stageId);

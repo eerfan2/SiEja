@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:si_eja/models/game_type.dart';
 import 'package:si_eja/models/question_model.dart';
+import 'package:si_eja/services/material_service.dart';
 import 'package:si_eja/services/question_service.dart';
 
 /// Menyusun 10 soal untuk satu stage dengan prioritas:
@@ -95,6 +96,11 @@ class StageQuestionComposer {
   ///
   /// Mengembalikan soal lokal saja jika Firestore tidak tersedia atau kosong.
   Future<List<Map<String, dynamic>>> compose(int stageId) async {
+    // ── 0. Pastikan katalog materi aktif sudah siap ────────────────────────────
+    try {
+      await MaterialService().loadActiveMaterials();
+    } catch (_) {}
+
     // ── 1. Ambil soal dari Firestore ──────────────────────────────────────────
     List<QuestionModel> firestoreQuestions = [];
     try {
@@ -115,22 +121,54 @@ class StageQuestionComposer {
       if (result.length >= 10) break;
       final key = q.uniqueKey;
       if (!usedKeys.contains(key)) {
-        result.add(q.toLocalMap());
+        final map = q.toLocalMap();
+        map['source'] = 'Firestore';
+        result.add(map);
         usedKeys.add(key);
       }
     }
 
+    final int countFromFirestore = result.length;
+
     // ── 3. Fallback lokal jika kurang dari 10 ────────────────────────────────
     if (result.length < 10) {
+      final needed = 10 - result.length;
       debugPrint(
-        '[Composer] Soal kurang (${result.length}), menambah dari lokal',
+        '[Composer] Soal aktif Firestore: $countFromFirestore. Mengambil $needed soal pelengkap dari Default Lokal.',
       );
       _padWithLocal(stageId, result, usedKeys);
     }
 
+    // Berikan tag sumber pada soal pelengkap
+    for (final item in result) {
+      item.putIfAbsent('source', () => 'Default Lokal');
+    }
+
     result.shuffle(_random);
 
-    return result.take(10).toList();
+    final finalQuestions = result.take(10).toList();
+
+    // ── Cetak Informasi Sumber Soal ke Terminal ─────────────────────────────
+    final int fromFirestore = finalQuestions.where((q) => q['source'] == 'Firestore').length;
+    final int fromLocal = finalQuestions.where((q) => q['source'] == 'Default Lokal').length;
+
+    debugPrint('╔══════════════════════════════════════════════════════════════════');
+    debugPrint('║ 🎮 [SiEja] KOMPOSISI 10 SOAL SESI BERMAIN — STAGE $stageId');
+    debugPrint('║ 📊 Ringkasan: $fromFirestore Soal Firestore | $fromLocal Soal Default Lokal');
+    debugPrint('╟──────────────────────────────────────────────────────────────────');
+    for (int i = 0; i < finalQuestions.length; i++) {
+      final q = finalQuestions[i];
+      final isFirestore = q['source'] == 'Firestore';
+      final srcTag = isFirestore ? '🔥 [FIRESTORE]' : '📦 [DEFAULT]  ';
+      final typeStr = q['type'] is GameType ? (q['type'] as GameType).name : q['type'].toString();
+      final detail = q['type'] == GameType.urutkanHuruf
+          ? 'Urutkan Huruf (${q['letterSequenceConfig']?.startLetter ?? 'A'}-${q['letterSequenceConfig']?.endLetter ?? 'Z'})'
+          : 'Kata: "${q['kata']}", Huruf: "${q['huruf']?.toString().toUpperCase()}"';
+      debugPrint('║ ${(i + 1).toString().padLeft(2)}. $srcTag $typeStr -> $detail');
+    }
+    debugPrint('╚══════════════════════════════════════════════════════════════════');
+
+    return finalQuestions;
   }
 
   // ─── Helper: bangun kandidat lokal untuk satu tipe ─────────────────────────
@@ -142,7 +180,7 @@ class StageQuestionComposer {
     GameType type,
     Set<String> usedKeys,
   ) {
-    final kata = _stageKata[stageId] ?? [];
+    final kata = _stageKata[stageId] ?? _stageKata[6]!;
     final List<Map<String, dynamic>> candidates = [];
 
     for (final k in kata) {
@@ -171,8 +209,8 @@ class StageQuestionComposer {
     List<Map<String, dynamic>> result,
     Set<String> usedKeys,
   ) {
-    final kata = _stageKata[stageId] ?? [];
-    final komposisi = _stageKomposisi[stageId]!;
+    final kata = _stageKata[stageId] ?? _stageKata[6]!;
+    final komposisi = _stageKomposisi[stageId] ?? _stageKomposisi[6]!;
 
     // Iterasi komposisi sebagai panduan tipe
     for (final kompo in komposisi) {

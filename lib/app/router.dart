@@ -151,30 +151,3 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
 );
-
-// Private widget untuk placeholder sementara
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  
-  const _PlaceholderScreen({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-      ),
-      body: Center(
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 24, 
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}

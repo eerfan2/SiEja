@@ -5,6 +5,7 @@ import 'package:si_eja/services/audio_service.dart';
 import 'package:si_eja/services/progress_service.dart';
 import 'package:si_eja/widgets/asset_button.dart';
 import 'package:si_eja/widgets/bg_scaffold.dart';
+import 'package:si_eja/services/stage_service.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -21,14 +22,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
   int _totalScore = 0;
   List<Map<String, dynamic>> _stageList = [];
 
-  final List<Map<String, dynamic>> _stageMetadata = [
-    {'id': 1, 'nama': 'Stage 1', 'huruf': 'A - E', 'lokasi': 'Awal Petualangan'},
-    {'id': 2, 'nama': 'Stage 2', 'huruf': 'F - J', 'lokasi': 'Taman Bintang'},
-    {'id': 3, 'nama': 'Stage 3', 'huruf': 'K - O', 'lokasi': 'Desa Alfabet'},
-    {'id': 4, 'nama': 'Stage 4', 'huruf': 'P - T', 'lokasi': 'Pelangi Mengeja'},
-    {'id': 5, 'nama': 'Stage 5', 'huruf': 'U - Z', 'lokasi': 'Taman Huruf'},
-    {'id': 6, 'nama': 'Stage 6', 'huruf': 'A - Z', 'lokasi': 'Istana Literasi'},
-  ];
 
   @override
   void initState() {
@@ -37,19 +30,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
     _loadProgressData();
   }
 
-  void _loadProgressData() {
+  Future<void> _loadProgressData() async {
     final progressService = ProgressService();
     _studentName = progressService.getStudentName();
     if (_studentName.isEmpty) _studentName = 'Siswa';
     _isPerempuan = progressService.currentJenisKelamin == 'perempuan';
 
+    final stageModels = await StageService().getStages();
     int completed = 0;
     int stars = 0;
     int score = 0;
     final List<Map<String, dynamic>> stages = [];
 
-    for (var meta in _stageMetadata) {
-      final int stageId = meta['id'];
+    for (var model in stageModels) {
+      final int stageId = model.number;
       final status = progressService.getStageStatus(stageId);
       final stageScore = progressService.getStageScore(stageId);
       final stageStars = _getStarCount(stageScore);
@@ -61,13 +55,17 @@ class _ProgressScreenState extends State<ProgressScreen> {
       score += stageScore;
 
       stages.add({
-        ...meta,
+        'id': stageId,
+        'nama': model.nama,
+        'huruf': model.huruf,
+        'lokasi': model.lokasi,
         'status': status,
         'score': stageScore,
         'stars': stageStars,
       });
     }
 
+    if (!mounted) return;
     setState(() {
       _completedStagesCount = completed;
       _totalStarsCount = stars;
@@ -89,7 +87,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final screenWidth = mediaQuery.size.width;
     final screenHeight = mediaQuery.size.height;
     final paddingTop = mediaQuery.padding.top;
-    final paddingBottom = mediaQuery.padding.bottom;
 
     return PopScope(
       canPop: false,
@@ -226,7 +223,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     _buildStatItem(
                       icon: AppImages.icLevel,
                       title: 'Stage',
-                      value: '$_completedStagesCount / 6',
+                      value: '$_completedStagesCount / ${_stageList.isNotEmpty ? _stageList.length : 6}',
                       color: const Color(0xFF4FC3F7),
                       isTablet: screenWidth >= 600,
                     ),

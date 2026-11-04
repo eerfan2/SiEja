@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:si_eja/core/app_constants.dart';
 import 'package:si_eja/models/game_type.dart';
 import 'package:si_eja/models/question_model.dart';
+import 'package:si_eja/services/material_service.dart';
 
 /// Service untuk mengambil soal dari Cloud Firestore collection `soal`.
 ///
@@ -24,11 +25,8 @@ class QuestionService {
 
 
 
-  // ─── ID stage yang valid ─────────────────────────────────────────────────────
-
-  static const Set<String> _validStageIds = {
-    'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6',
-  };
+  // ─── Validasi stageId ────────────────────────────────────────────────────────
+  static bool isValidStageId(int stageId) => stageId >= 1;
 
   // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -47,12 +45,16 @@ class QuestionService {
     final stageKey = 'stage$stageId';
 
     // Defensive: pastikan stageId valid
-    if (!_validStageIds.contains(stageKey)) {
+    if (!isValidStageId(stageId)) {
       debugPrint('[QuestionService] stageId tidak valid: $stageId');
       return [];
     }
 
     try {
+      // Pastikan katalog materi aktif sudah selesai dimuat agar validasi hasValidAsset
+      // dapat mengenali kata materi dari katalog dinamis (misal: Bowo, Owl, Tedy)
+      await MaterialService().loadActiveMaterials();
+
       final snapshot = await _firestore
           .collection('soal')
           .where('stageId', isEqualTo: stageKey)
@@ -110,18 +112,26 @@ class QuestionService {
 
   // ─── Helper validasi ─────────────────────────────────────────────────────────
 
-  /// Memeriksa apakah [huruf] dan [kata] memiliki asset lokal yang valid.
+  /// Memeriksa apakah [huruf] dan [kata] memiliki asset yang valid (lokal atau cloud).
   ///
-  /// Contoh:
-  /// ```dart
-  /// QuestionService.hasValidAsset('k', 'kucing'); // true
-  /// QuestionService.hasValidAsset('k', 'kuda'); // false
-  /// ```
+  /// Memeriksa pemetaan lokal bawaan [AppImages.hurufKeKata] terlebih dahulu,
+  /// kemudian memeriksa ketersediaan kata pada katalog dinamis [MaterialService].
   static bool hasValidAsset(String huruf, String kata) {
+    final cleanKata = kata.toLowerCase().trim();
     final cleanHuruf = huruf.toLowerCase().trim();
+
+    // 1. Cek pemetaan aset lokal bawaan
     final validKata = AppImages.hurufKeKata[cleanHuruf];
-    if (validKata == null) return false;
-    return validKata.toLowerCase() == kata.toLowerCase().trim();
+    if (validKata != null && validKata.toLowerCase() == cleanKata) {
+      return true;
+    }
+
+    // 2. Cek ketersediaan di katalog dinamis aktif
+    if (MaterialService().hasMaterial(cleanKata)) {
+      return true;
+    }
+
+    return false;
   }
 
   /// Mengelompokkan list [QuestionModel] berdasarkan [GameType].

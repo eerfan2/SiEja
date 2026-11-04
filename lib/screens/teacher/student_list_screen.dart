@@ -469,6 +469,396 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
   }
 
+  void _showEditSiswaDialog(Map<String, dynamic> student) {
+    final namaLengkapController =
+        TextEditingController(text: student['namaLengkap'] ?? '');
+    final usernameController =
+        TextEditingController(text: student['username'] ?? '');
+    final usiaController =
+        TextEditingController(text: (student['usia'] ?? '').toString());
+    final pinController =
+        TextEditingController(text: student['pin'] ?? '');
+    String jenisKelamin =
+        (student['jenisKelamin'] ?? 'laki-laki').toString().toLowerCase() ==
+                'perempuan'
+            ? 'perempuan'
+            : 'laki-laki';
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isTablet = ResponsiveHelper.isTablet(screenWidth);
+        final dialogWidth = isTablet
+            ? (screenWidth * 0.88)
+                .clamp(320.0, TabletLayout.studentListPopupMaxWidth)
+            : ResponsiveHelper.dialogWidth(screenWidth);
+        final dialogPadding = isTablet
+            ? const EdgeInsets.fromLTRB(
+                TabletLayout.studentListPopupPaddingH,
+                TabletLayout.studentListPopupPaddingTop,
+                TabletLayout.studentListPopupPaddingH,
+                TabletLayout.studentListPopupPaddingBottom,
+              )
+            : ResponsiveHelper.dialogPadding(screenWidth);
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: SizedBox(
+                width: dialogWidth,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: isTablet
+                            ? TabletLayout.studentListPopupMaxWidth
+                            : 560,
+                      ),
+                      child: Image.asset(
+                        AppImages.frameStudentList,
+                        width: dialogWidth,
+                        fit: BoxFit.fitWidth,
+                      ),
+                    ),
+                    Padding(
+                      padding: dialogPadding,
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Edit Data Siswa',
+                              style: TextStyle(
+                                fontSize: isTablet
+                                    ? TabletLayout.studentListPopupTitleFontSize
+                                    : 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Fredoka',
+                                color: const Color(0xFF5A4FCF),
+                              ),
+                            ),
+                            SizedBox(height: isTablet ? 18 : 14),
+
+                            // Nama Lengkap
+                            _buildDialogTextField(
+                              controller: namaLengkapController,
+                              hint: 'Nama Lengkap',
+                              isTablet: isTablet,
+                            ),
+                            SizedBox(height: isTablet ? 12 : 10),
+
+                            // Username
+                            _buildDialogTextField(
+                              controller: usernameController,
+                              hint: 'Username Login',
+                              isTablet: isTablet,
+                            ),
+                            SizedBox(height: isTablet ? 12 : 10),
+
+                            // PIN Masuk
+                            _buildDialogTextField(
+                              controller: pinController,
+                              hint: 'PIN Masuk (3 digit angka)',
+                              keyboardType: TextInputType.number,
+                              isTablet: isTablet,
+                            ),
+                            SizedBox(height: isTablet ? 12 : 10),
+
+                            // Usia
+                            _buildDialogTextField(
+                              controller: usiaController,
+                              hint: 'Usia (tahun)',
+                              keyboardType: TextInputType.number,
+                              isTablet: isTablet,
+                            ),
+                            SizedBox(height: isTablet ? 12 : 10),
+
+                            // Jenis Kelamin Dropdown
+                            InnerShadowContainer(
+                              height: isTablet
+                                  ? TabletLayout.studentListPopupInputHeight
+                                  : 45,
+                              borderRadius: 10,
+                              backgroundColor: const Color(0xFFE1D9CF),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                child: DropdownButton<String>(
+                                  value: jenisKelamin,
+                                  isExpanded: true,
+                                  underline: const SizedBox(),
+                                  alignment: Alignment.center,
+                                  dropdownColor: const Color(0xFFE1D9CF),
+                                  style: TextStyle(
+                                    fontFamily: 'Fredoka',
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF4A3E3D),
+                                    fontSize: isTablet
+                                        ? TabletLayout.studentListPopupInputFontSize
+                                        : 14,
+                                  ),
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: 'laki-laki',
+                                      child: Center(
+                                        child: Text(
+                                          '👦 Laki-laki',
+                                          style: TextStyle(
+                                            fontFamily: 'Fredoka',
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFF4A3E3D),
+                                            fontSize: isTablet
+                                                ? TabletLayout.studentListPopupInputFontSize
+                                                : 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'perempuan',
+                                      child: Center(
+                                        child: Text(
+                                          '👧 Perempuan',
+                                          style: TextStyle(
+                                            fontFamily: 'Fredoka',
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFF4A3E3D),
+                                            fontSize: isTablet
+                                                ? TabletLayout.studentListPopupInputFontSize
+                                                : 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: isSaving
+                                      ? null
+                                      : (value) {
+                                          setDialogState(() {
+                                            jenisKelamin = value!;
+                                          });
+                                        },
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: isTablet ? 22 : 18),
+
+                            // Tombol aksi
+                            Row(
+                              children: [
+                                // Tombol Batal
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: isSaving
+                                        ? null
+                                        : () => Navigator.pop(context),
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: isTablet
+                                            ? TabletLayout.studentListPopupBtnPaddingV
+                                            : 12,
+                                      ),
+                                      color: Colors.transparent,
+                                      child: Center(
+                                        child: Text(
+                                          'Batal',
+                                          style: TextStyle(
+                                            fontFamily: 'Fredoka',
+                                            fontSize: isTablet
+                                                ? TabletLayout.studentListPopupBtnFontSize
+                                                : 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+
+                                // Tombol Simpan Perubahan
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: isSaving
+                                        ? null
+                                        : () async {
+                                            final namaLengkap =
+                                                namaLengkapController.text.trim();
+                                            final username =
+                                                usernameController.text.trim();
+                                            final pin =
+                                                pinController.text.trim();
+                                            final usia = int.tryParse(
+                                                    usiaController.text.trim()) ??
+                                                0;
+
+                                            if (namaLengkap.isEmpty ||
+                                                username.isEmpty) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Nama dan username harus diisi!',
+                                                    style: TextStyle(
+                                                        fontFamily: 'Fredoka'),
+                                                  ),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            if (pin.length != 3 ||
+                                                int.tryParse(pin) == null) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'PIN harus berupa 3 digit angka (contoh: 001)!',
+                                                    style: TextStyle(
+                                                        fontFamily: 'Fredoka'),
+                                                  ),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            if (usia <= 0) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Usia harus berupa angka positif!',
+                                                    style: TextStyle(
+                                                        fontFamily: 'Fredoka'),
+                                                  ),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            setDialogState(() => isSaving = true);
+
+                                            final errorMessage =
+                                                await FirebaseService().editSiswa(
+                                              siswaId: student['id'],
+                                              namaLengkap: namaLengkap,
+                                              username: username,
+                                              pin: pin,
+                                              usia: usia,
+                                              jenisKelamin: jenisKelamin,
+                                              oldUsername:
+                                                  student['username'] ?? '',
+                                              oldPin: student['pin'] ?? '',
+                                            );
+
+                                            if (!context.mounted) return;
+
+                                            if (errorMessage == null) {
+                                              Navigator.pop(context);
+                                              _loadStudents();
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Data $namaLengkap berhasil diperbarui!',
+                                                    style: const TextStyle(
+                                                        fontFamily: 'Fredoka'),
+                                                  ),
+                                                  backgroundColor: Colors.green,
+                                                  duration: const Duration(
+                                                      seconds: 3),
+                                                ),
+                                              );
+                                            } else {
+                                              setDialogState(() => isSaving = false);
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    errorMessage,
+                                                    style: const TextStyle(
+                                                        fontFamily: 'Fredoka'),
+                                                  ),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          },
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 100),
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: isTablet
+                                            ? TabletLayout.studentListPopupBtnPaddingV
+                                            : 12,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isSaving
+                                            ? const Color(0xFF7E74E8)
+                                            : const Color(0xFF5A4FCF),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF5A4FCF)
+                                                .withOpacity(0.3),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Center(
+                                        child: isSaving
+                                            ? const SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : Text(
+                                                'Simpan Perubahan',
+                                                style: TextStyle(
+                                                  fontFamily: 'Fredoka',
+                                                  fontSize: isTablet
+                                                      ? TabletLayout.studentListPopupBtnFontSize
+                                                      : 13,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildDialogTextField({
     required TextEditingController controller,
     required String hint,
@@ -677,50 +1067,102 @@ class _StudentListScreenState extends State<StudentListScreen> {
                           ),
                           SizedBox(height: isTablet ? 18 : 14),
 
-                          // Tombol Hapus Siswa dalam Popup
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.pop(dialogContext);
-                              _showHapusDialog(
-                                student['id'],
-                                student['namaLengkap'] ?? '',
-                              );
-                            },
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: isTablet ? 22 : 16,
-                                vertical: isTablet
-                                    ? TabletLayout.studentListPopupBtnPaddingV
-                                    : 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade100,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.red.shade300),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.delete_outline,
-                                    size: isTablet ? 22 : 18,
-                                    color: Colors.red.shade700,
+                          // Tombol Aksi: Edit Siswa & Hapus Siswa dalam Popup
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Tombol Edit Siswa
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.pop(dialogContext);
+                                  _showEditSiswaDialog(student);
+                                },
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isTablet ? 18 : 14,
+                                    vertical: isTablet
+                                        ? TabletLayout.studentListPopupBtnPaddingV
+                                        : 8,
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Hapus Siswa',
-                                    style: TextStyle(
-                                      fontSize: isTablet
-                                          ? TabletLayout.studentListPopupBtnFontSize
-                                          : 12,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Fredoka',
-                                      color: Colors.red.shade700,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF5A4FCF).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFF5A4FCF).withOpacity(0.4),
                                     ),
                                   ),
-                                ],
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.edit_outlined,
+                                        size: isTablet ? 20 : 16,
+                                        color: const Color(0xFF5A4FCF),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Edit Siswa',
+                                        style: TextStyle(
+                                          fontSize: isTablet
+                                              ? TabletLayout.studentListPopupBtnFontSize
+                                              : 12,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'Fredoka',
+                                          color: const Color(0xFF5A4FCF),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 10),
+
+                              // Tombol Hapus Siswa
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.pop(dialogContext);
+                                  _showHapusDialog(
+                                    student['id'],
+                                    student['namaLengkap'] ?? '',
+                                  );
+                                },
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isTablet ? 18 : 14,
+                                    vertical: isTablet
+                                        ? TabletLayout.studentListPopupBtnPaddingV
+                                        : 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.red.shade300),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline,
+                                        size: isTablet ? 20 : 16,
+                                        color: Colors.red.shade700,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Hapus Siswa',
+                                        style: TextStyle(
+                                          fontSize: isTablet
+                                              ? TabletLayout.studentListPopupBtnFontSize
+                                              : 12,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'Fredoka',
+                                          color: Colors.red.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

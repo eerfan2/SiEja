@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:si_eja/core/app_constants.dart';
 import 'package:si_eja/models/game_type.dart';
 import 'package:si_eja/services/audio_service.dart';
+import 'package:si_eja/services/material_service.dart';
 import 'package:si_eja/services/progress_service.dart';
 import 'package:si_eja/services/stage_question_composer.dart';
 import 'package:si_eja/widgets/asset_button.dart';
 import 'package:si_eja/widgets/bg_scaffold.dart';
+import 'package:si_eja/widgets/material_image_widget.dart';
 
 class StageScreen extends StatefulWidget {
   final int stageId;
@@ -31,11 +33,32 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     4: ['panda', 'quran', 'rusa', 'singa', 'tikus'],
     5: ['ulat', 'vas', 'wortel', 'xilofon', 'yoyo', 'zebra'],
     6: [
-      'ayam', 'bebek', 'cicak', 'domba', 'elang', 'feri',
-      'gajah', 'harimau', 'ikan', 'jerapah', 'kucing',
-      'lebah', 'monyet', 'nanas', 'onta', 'panda', 'quran',
-      'rusa', 'singa', 'tikus', 'ulat', 'vas', 'wortel',
-      'xilofon', 'yoyo', 'zebra'
+      'ayam',
+      'bebek',
+      'cicak',
+      'domba',
+      'elang',
+      'feri',
+      'gajah',
+      'harimau',
+      'ikan',
+      'jerapah',
+      'kucing',
+      'lebah',
+      'monyet',
+      'nanas',
+      'onta',
+      'panda',
+      'quran',
+      'rusa',
+      'singa',
+      'tikus',
+      'ulat',
+      'vas',
+      'wortel',
+      'xilofon',
+      'yoyo',
+      'zebra'
     ],
   };
 
@@ -47,9 +70,32 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     4: ['p', 'q', 'r', 's', 't'],
     5: ['u', 'v', 'w', 'x', 'y', 'z'],
     6: [
-      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-      'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
-      'u', 'v', 'w', 'x', 'y', 'z'
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'g',
+      'h',
+      'i',
+      'j',
+      'k',
+      'l',
+      'm',
+      'n',
+      'o',
+      'p',
+      'q',
+      'r',
+      's',
+      't',
+      'u',
+      'v',
+      'w',
+      'x',
+      'y',
+      'z'
     ],
   };
 
@@ -86,11 +132,11 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     6: [
       {'type': GameType.dengarSuaraHuruf, 'count': 1},
       {'type': GameType.tebakGambarObjek, 'count': 1},
-      {'type': GameType.hurufYangHilang,  'count': 1},
-      {'type': GameType.hurufAwalApa,     'count': 1},
-      {'type': GameType.cocokkanHuruf,    'count': 2},
-      {'type': GameType.urutkanHuruf,     'count': 2},
-      {'type': GameType.susunKata,        'count': 2},
+      {'type': GameType.hurufYangHilang, 'count': 1},
+      {'type': GameType.hurufAwalApa, 'count': 1},
+      {'type': GameType.cocokkanHuruf, 'count': 2},
+      {'type': GameType.urutkanHuruf, 'count': 2},
+      {'type': GameType.susunKata, 'count': 2},
     ],
   };
 
@@ -100,6 +146,7 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
   bool _showResult = false;
   bool _isCorrect = false;
   bool _answered = false;
+  bool _isSubmitting = false; // Anti-double submit lock
   bool _canAnswer = false; // Lock pilihan saat instruksi audio sedang berputar
   bool _isLoadingQuestions = false; // Loading saat menyiapkan bank soal
   String? _selectedAnswer; // Jawaban yang dipilih user untuk efek visual
@@ -112,13 +159,35 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
   String _currentHuruf = '';
   List<String> _choices = [];
   List<String> _userAnswer = [];
-  List<int> _selectedIndices = []; // Untuk melacak tombol huruf yang dipilih secara spesifik
+  List<int> _selectedIndices =
+      []; // Untuk melacak tombol huruf yang dipilih secara spesifik
   List<String> _shuffledLetters = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Guard akses Fase 3: cegah akses langsung jika stage terkunci atau stage sebelumnya belum selesai
+    if (!ProgressService().canPlayStage(widget.stageId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Stage ini belum dapat dimainkan!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/stage-map');
+          }
+        }
+      });
+      return;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AudioService().playBGM(AppAudio.bgmStage);
     });
@@ -136,7 +205,8 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       _saveCurrentDraft();
     }
   }
@@ -157,7 +227,8 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     final draft = ProgressService().getDraftStageProgress(widget.stageId);
     if (draft != null) {
       final List<dynamic> rawQuestions = draft['questions'] as List<dynamic>;
-      final List<Map<String, dynamic>> restoredQuestions = rawQuestions.map((q) {
+      final List<Map<String, dynamic>> restoredQuestions =
+          rawQuestions.map((q) {
         final typeIndex = q['typeIndex'] as int;
         return {
           'type': GameType.values[typeIndex],
@@ -169,7 +240,8 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
       final restoredIndex = draft['currentQuestion'] as int;
       final restoredScore = draft['score'] as int;
 
-      if (restoredQuestions.isNotEmpty && restoredIndex < restoredQuestions.length) {
+      if (restoredQuestions.isNotEmpty &&
+          restoredIndex < restoredQuestions.length) {
         setState(() {
           _questions = restoredQuestions;
           _totalQuestions = restoredQuestions.length;
@@ -190,6 +262,8 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
 
     List<Map<String, dynamic>> questions;
     try {
+      // Pastikan katalog materi aktif sudah termuat terlebih dahulu
+      await MaterialService().loadActiveMaterials();
       // Gunakan StageQuestionComposer: prioritas Firestore + fallback lokal
       questions = await StageQuestionComposer().compose(widget.stageId);
     } catch (_) {
@@ -212,8 +286,9 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
   /// Bank soal lokal murni — digunakan sebagai fallback terakhir jika
   /// [StageQuestionComposer] gagal sama sekali.
   List<Map<String, dynamic>> _buildLocalQuestions() {
-    final komposisi = stageKomposisi[widget.stageId]!;
-    final kataList = List<String>.from(stageKata[widget.stageId]!);
+    final komposisi = stageKomposisi[widget.stageId] ?? stageKomposisi[6]!;
+    final kataList =
+        List<String>.from(stageKata[widget.stageId] ?? stageKata[6]!);
     final random = Random();
     final List<Map<String, dynamic>> questions = [];
 
@@ -269,6 +344,7 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
       _currentHuruf = huruf;
       _answered = false;
       _canAnswer = false;
+      _isSubmitting = false;
       _showResult = false;
       _userAnswer = [];
       _selectedIndices = [];
@@ -281,53 +357,81 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
   }
 
   void _setupChoices(GameType type, String kata, String huruf) {
-    final currentStageLetters = stageHuruf[widget.stageId]!;
-    final currentStageWords = stageKata[widget.stageId]!.map((k) => k.toLowerCase()).toList();
+    final currentStageLetters = stageHuruf[widget.stageId] ?? stageHuruf[6]!;
+    final currentStageWords = (stageKata[widget.stageId] ?? stageKata[6]!)
+        .map((k) => k.toLowerCase())
+        .toList();
     final random = Random();
+    final allLetters = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
     switch (type) {
       case GameType.dengarSuaraHuruf:
         // 4 pilihan huruf, 1 benar
-        final wrong = currentStageLetters.where((h) => h != huruf).toList()..shuffle();
-        _choices = [huruf, ...wrong.take(3)]..shuffle();
+        final distractorCandidates =
+            currentStageLetters.where((h) => h != huruf).toList();
+        if (distractorCandidates.length < 3) {
+          distractorCandidates.addAll(allLetters
+              .where((h) => h != huruf && !distractorCandidates.contains(h)));
+        }
+        distractorCandidates.shuffle(random);
+        _choices = [huruf, ...distractorCandidates.take(3)]..shuffle(random);
         break;
 
       case GameType.tebakGambarObjek:
         // 3 pilihan gambar, 1 benar
+        final cleanKata = kata.toLowerCase().trim();
         final wrongKata = currentStageWords
-            .where((k) => k != AppImages.hurufKeKata[huruf]?.toLowerCase())
+            .where((k) => k.toLowerCase().trim() != cleanKata)
             .toList()
-          ..shuffle();
-        _choices = [
-          AppImages.hurufKeKata[huruf]!.toLowerCase(),
-          ...wrongKata.take(2)
-        ]..shuffle();
+          ..shuffle(random);
+        _choices = [cleanKata, ...wrongKata.take(2)]..shuffle(random);
         break;
 
       case GameType.hurufAwalApa:
         // 4 pilihan huruf, 1 benar
-        final wrong = currentStageLetters.where((h) => h != huruf).toList()..shuffle();
-        _choices = [huruf, ...wrong.take(3)]..shuffle();
+        final distractorCandidates =
+            currentStageLetters.where((h) => h != huruf).toList();
+        if (distractorCandidates.length < 3) {
+          distractorCandidates.addAll(allLetters
+              .where((h) => h != huruf && !distractorCandidates.contains(h)));
+        }
+        distractorCandidates.shuffle(random);
+        _choices = [huruf, ...distractorCandidates.take(3)]..shuffle(random);
         break;
 
       case GameType.hurufYangHilang:
         // Tampilkan kata dengan 1 huruf hilang (menggunakan kata.length ~/ 2)
         // 4 pilihan huruf untuk mengisi
         final hiddenIndex = kata.length ~/ 2;
-        final wrong = currentStageLetters.where((h) => h != kata[hiddenIndex]).toList()..shuffle();
-        _choices = [kata[hiddenIndex], ...wrong.take(3)]..shuffle();
+        final targetLetter = kata[hiddenIndex].toLowerCase();
+        final distractorCandidates =
+            currentStageLetters.where((h) => h != targetLetter).toList();
+        if (distractorCandidates.length < 3) {
+          distractorCandidates.addAll(allLetters.where(
+              (h) => h != targetLetter && !distractorCandidates.contains(h)));
+        }
+        distractorCandidates.shuffle(random);
+        _choices = [targetLetter, ...distractorCandidates.take(3)]
+          ..shuffle(random);
         break;
 
       case GameType.susunKata:
         // Huruf acak untuk disusun
-        _shuffledLetters = kata.split('')..shuffle();
+        _shuffledLetters = kata.split('')..shuffle(random);
         break;
 
       case GameType.cocokkanHuruf:
         // Pasangkan huruf besar dengan kecil
         // Tampilkan 4 huruf besar, 4 huruf kecil
-        final wrongHuruf = currentStageLetters.where((h) => h != huruf).toList()..shuffle();
-        final displayHuruf = [huruf, ...wrongHuruf.take(3)]..shuffle();
+        final distractorCandidates =
+            currentStageLetters.where((h) => h != huruf).toList();
+        if (distractorCandidates.length < 3) {
+          distractorCandidates.addAll(allLetters
+              .where((h) => h != huruf && !distractorCandidates.contains(h)));
+        }
+        distractorCandidates.shuffle(random);
+        final displayHuruf = [huruf, ...distractorCandidates.take(3)]
+          ..shuffle(random);
         _choices = displayHuruf;
         break;
 
@@ -347,7 +451,8 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
           final allStageHuruf = List<String>.from(currentStageLetters);
           allStageHuruf.shuffle(random);
           // Konversi ke uppercase agar konsisten dengan format baru
-          selectedHuruf = allStageHuruf.take(4).map((h) => h.toUpperCase()).toList();
+          selectedHuruf =
+              allStageHuruf.take(4).map((h) => h.toUpperCase()).toList();
         }
 
         // _choices adalah huruf yang sudah diurutkan sesuai alfabet (jawaban benar)
@@ -366,14 +471,12 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
         }
 
         if (letterConfig != null) {
-          debugPrint(
-            '[UrutkanHuruf]\n'
-            'range: ${letterConfig.startLetter}-${letterConfig.endLetter}\n'
-            'letterCount: ${letterConfig.letterCount}\n'
-            'selected: ${selectedHuruf.join(",")}\n'
-            'display: ${_shuffledLetters.join(",")}\n'
-            'correct: ${_choices.join(",")}'
-          );
+          debugPrint('[UrutkanHuruf]\n'
+              'range: ${letterConfig.startLetter}-${letterConfig.endLetter}\n'
+              'letterCount: ${letterConfig.letterCount}\n'
+              'selected: ${selectedHuruf.join(",")}\n'
+              'display: ${_shuffledLetters.join(",")}\n'
+              'correct: ${_choices.join(",")}');
         }
         break;
     }
@@ -393,16 +496,21 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
           totalDurationMs = 4500;
           _secondIntroTimer = Timer(const Duration(milliseconds: 3000), () {
             if (mounted) {
-              AudioService().playSFX(AppAudio.huruf(huruf));
+              final letterPath = MaterialService()
+                  .resolveLetterAudioPath(kata, hurufFallback: huruf);
+              AudioService().playSFX(letterPath);
             }
           });
           break;
         case GameType.tebakGambarObjek:
           AudioService().playSFX(AppAudio.introDengar);
           totalDurationMs = 4500;
-          _secondIntroTimer = Timer(const Duration(milliseconds: 3000), () {
+          _secondIntroTimer =
+              Timer(const Duration(milliseconds: 3000), () async {
             if (mounted) {
-              AudioService().playSFX(AppAudio.kata(kata));
+              final audioUrl =
+                  await MaterialService().resolveWordAudioUrl(kata);
+              AudioService().playSFX(audioUrl);
             }
           });
           break;
@@ -417,9 +525,12 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
         case GameType.susunKata:
           AudioService().playSFX(AppAudio.introSusun);
           totalDurationMs = 6000;
-          _secondIntroTimer = Timer(const Duration(milliseconds: 4500), () {
+          _secondIntroTimer =
+              Timer(const Duration(milliseconds: 4500), () async {
             if (mounted) {
-              AudioService().playSFX(AppAudio.kata(kata));
+              final audioUrl =
+                  await MaterialService().resolveWordAudioUrl(kata);
+              AudioService().playSFX(audioUrl);
             }
           });
           break;
@@ -443,8 +554,52 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     });
   }
 
+  void _handleSubmitAnswer() {
+    if (!_canAnswer || _answered || _isSubmitting) return;
+
+    final q = _questions[_currentQuestion];
+    final type = q['type'] as GameType;
+
+    dynamic answerToEvaluate;
+    if (type == GameType.susunKata) {
+      if (_userAnswer.length != _currentKata.length) return;
+      answerToEvaluate = _userAnswer.join('');
+    } else if (type == GameType.urutkanHuruf) {
+      if (_userAnswer.length != _shuffledLetters.length) return;
+      answerToEvaluate = _userAnswer.join('');
+    } else {
+      if (_selectedAnswer == null) return;
+      answerToEvaluate = _selectedAnswer;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    _checkAnswer(answerToEvaluate);
+  }
+
+  Widget _buildSubmitButton({
+    required bool isEnabled,
+    required VoidCallback? onSubmit,
+    required bool isTablet,
+  }) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: isEnabled ? 1.0 : 0.4,
+      child: AssetButton(
+        normalAsset: AppImages.btnJawabNormal,
+        pressedAsset: AppImages.btnJawabPressed,
+        onTap: isEnabled && onSubmit != null ? onSubmit : () {},
+        width: isTablet ? 150 : 110,
+        height: isTablet ? 65 : 48,
+      ),
+    );
+  }
+
   void _checkAnswer(dynamic answer) {
     if (_answered) return;
+    _answered = true; // Langsung lock sinkron untuk mencegah Submit ganda
 
     final q = _questions[_currentQuestion];
     final type = q['type'] as GameType;
@@ -452,22 +607,28 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
 
     switch (type) {
       case GameType.dengarSuaraHuruf:
-        isCorrect = answer == _currentHuruf;
+        isCorrect =
+            answer?.toString().toLowerCase() == _currentHuruf.toLowerCase();
         break;
       case GameType.tebakGambarObjek:
-        isCorrect = answer == AppImages.hurufKeKata[_currentHuruf]?.toLowerCase();
+        isCorrect = answer?.toString().toLowerCase().trim() ==
+            _currentKata.toLowerCase().trim();
         break;
       case GameType.hurufAwalApa:
-        isCorrect = answer == _currentHuruf;
+        isCorrect =
+            answer?.toString().toLowerCase() == _currentHuruf.toLowerCase();
         break;
       case GameType.hurufYangHilang:
-        isCorrect = answer == _getMissingLetter();
+        isCorrect = answer?.toString().toLowerCase() ==
+            _getMissingLetter().toLowerCase();
         break;
       case GameType.susunKata:
-        isCorrect = _userAnswer.join('') == _currentKata;
+        isCorrect = _userAnswer.join('').toLowerCase().trim() ==
+            _currentKata.toLowerCase().trim();
         break;
       case GameType.cocokkanHuruf:
-        isCorrect = answer == _currentHuruf;
+        isCorrect =
+            answer?.toString().toLowerCase() == _currentHuruf.toLowerCase();
         break;
       case GameType.urutkanHuruf:
         isCorrect = _userAnswer.join('') == _choices.join('');
@@ -475,7 +636,6 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     }
 
     setState(() {
-      _answered = true;
       _isCorrect = isCorrect;
       _showResult = true;
       _selectedAnswer = answer?.toString();
@@ -561,9 +721,36 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
         break;
     }
 
-    return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      child: childWidget,
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOutQuad,
+      switchOutCurve: Curves.easeInQuad,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          alignment: Alignment.topCenter,
+          children: <Widget>[
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.04, 0.0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: SingleChildScrollView(
+        key: ValueKey<int>(_currentQuestion),
+        physics: const ClampingScrollPhysics(),
+        child: childWidget,
+      ),
     );
   }
 
@@ -573,7 +760,7 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: const Color(0xFF5A4FCF).withOpacity(0.85),
             borderRadius: BorderRadius.circular(12),
@@ -581,32 +768,37 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
           child: Text(
             'Dengarkan suara huruf ini!',
             style: TextStyle(
-              fontSize: isTablet ? 24 : 16,
+              fontSize: isTablet ? 20 : 15,
               fontFamily: 'Fredoka',
               color: Colors.white,
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 14),
         GestureDetector(
-          onTap: () => AudioService().playSFX(AppAudio.huruf(_currentHuruf)),
+          onTap: () {
+            final path = MaterialService().resolveLetterAudioPath(_currentKata,
+                hurufFallback: _currentHuruf);
+            AudioService().playSFX(path);
+          },
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset(AppImages.icSound, 
-                width: isTablet ? 96 : 64, 
-                height: isTablet ? 96 : 64,
+              Image.asset(
+                AppImages.icSound,
+                width: isTablet ? 76 : 52,
+                height: isTablet ? 76 : 52,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 'Tap untuk dengar',
                 style: TextStyle(
-                  fontSize: isTablet ? 20 : 14,
+                  fontSize: isTablet ? 18 : 13,
                   fontFamily: 'Fredoka',
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
-                  shadows: [
+                  shadows: const [
                     Shadow(
                       blurRadius: 6,
                       color: Colors.black54,
@@ -619,15 +811,15 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        const Text(
+        const SizedBox(height: 14),
+        Text(
           'Huruf apakah itu?',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: isTablet ? 22 : 16,
             fontFamily: 'Fredoka',
             fontWeight: FontWeight.bold,
             color: Colors.white,
-            shadows: [
+            shadows: const [
               Shadow(
                 blurRadius: 6,
                 color: Colors.black54,
@@ -636,26 +828,33 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 2.5,
+          childAspectRatio: 2.6,
           children: _choices.map((choice) {
             final isSelected = _selectedAnswer == choice;
             return _ScaleOptionButton(
-              onTap: (!_canAnswer || _answered) ? null : () => _checkAnswer(choice),
+              onTap: (!_canAnswer || _answered || _isSubmitting)
+                  ? null
+                  : () => setState(() => _selectedAnswer = choice),
               isSelected: isSelected,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(_answered && !isSelected ? 0.6 : 0.9),
+                  color: isSelected
+                      ? const Color(0xFFFFE082)
+                      : Colors.white
+                          .withOpacity(_answered && !isSelected ? 0.6 : 0.9),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: const Color(0xFF5A4FCF),
-                    width: 2,
+                    color: isSelected
+                        ? const Color(0xFFFFA000)
+                        : const Color(0xFF5A4FCF),
+                    width: isSelected ? 3 : 2,
                   ),
                 ),
                 child: Center(
@@ -665,13 +864,25 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'Fredoka',
-                      color: const Color(0xFF5A4FCF).withOpacity(_answered && !isSelected ? 0.6 : 1.0),
+                      color: isSelected
+                          ? const Color(0xFF4A148C)
+                          : const Color(0xFF5A4FCF).withOpacity(
+                              _answered && !isSelected ? 0.6 : 1.0),
                     ),
                   ),
                 ),
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 24),
+        _buildSubmitButton(
+          isEnabled: _canAnswer &&
+              !_answered &&
+              !_isSubmitting &&
+              _selectedAnswer != null,
+          onSubmit: _handleSubmitAnswer,
+          isTablet: isTablet,
         ),
       ],
     );
@@ -683,7 +894,7 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: const Color(0xFF5A4FCF).withOpacity(0.85),
             borderRadius: BorderRadius.circular(12),
@@ -698,24 +909,28 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         GestureDetector(
-          onTap: () => AudioService().playSFX(AppAudio.kata(_currentKata)),
+          onTap: () async {
+            final audioUrl =
+                await MaterialService().resolveWordAudioUrl(_currentKata);
+            AudioService().playSFX(audioUrl);
+          },
           child: Image.asset(
             AppImages.icSound,
-            width: isTablet ? 96 : 64,
-            height: isTablet ? 96 : 64,
+            width: isTablet ? 76 : 52,
+            height: isTablet ? 76 : 52,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Text(
           'Pilih gambar yang tepat!',
           style: TextStyle(
-            fontSize: isTablet ? 24 : 16,
+            fontSize: isTablet ? 20 : 15,
             fontFamily: 'Fredoka',
             fontWeight: FontWeight.bold,
             color: Colors.white,
-            shadows: [
+            shadows: const [
               Shadow(
                 blurRadius: 6,
                 color: Colors.black54,
@@ -728,43 +943,49 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: _choices.map((choice) {
-            final letter = AppImages.hurufKeKata.entries
-                .firstWhere(
-                  (e) => e.value.toLowerCase() == choice,
-                  orElse: () => const MapEntry('a', 'Ayam'),
-                )
-                .key;
             final isSelected = _selectedAnswer == choice;
-            final boxSize = isTablet ? 150.0 : 100.0;
+            final boxSize = isTablet ? 130.0 : 88.0;
             return _ScaleOptionButton(
-              onTap: (!_canAnswer || _answered) ? null : () => _checkAnswer(choice),
+              onTap: (!_canAnswer || _answered || _isSubmitting)
+                  ? null
+                  : () => setState(() => _selectedAnswer = choice),
               isSelected: isSelected,
               child: Container(
                 width: boxSize,
                 height: boxSize,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(_answered && !isSelected ? 0.6 : 0.9),
+                  color: isSelected
+                      ? const Color(0xFFFFE082)
+                      : Colors.white
+                          .withOpacity(_answered && !isSelected ? 0.6 : 0.9),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFF5A4FCF),
-                    width: 2,
+                    color: isSelected
+                        ? const Color(0xFFFFA000)
+                        : const Color(0xFF5A4FCF),
+                    width: isSelected ? 3 : 2,
                   ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Image.asset(
-                    AppImages.hurufKeGambar[letter] ?? '',
+                  child: MaterialImageWidget(
+                    word: choice,
+                    huruf: choice.isNotEmpty ? choice[0] : null,
                     fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) => Icon(
-                      Icons.pets,
-                      size: isTablet ? 60 : 40,
-                      color: Colors.grey,
-                    ),
                   ),
                 ),
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 28),
+        _buildSubmitButton(
+          isEnabled: _canAnswer &&
+              !_answered &&
+              !_isSubmitting &&
+              _selectedAnswer != null,
+          onSubmit: _handleSubmitAnswer,
+          isTablet: isTablet,
         ),
       ],
     );
@@ -804,20 +1025,18 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
-                  Image.asset(
-                    AppImages.hurufKeGambar[_currentHuruf] ?? '',
+                  MaterialImageWidget(
+                    word: _currentKata,
+                    huruf: _currentHuruf,
                     width: isTablet ? 150 : 100,
                     height: isTablet ? 120 : 80,
                     fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) => Icon(
-                      Icons.pets,
-                      size: isTablet ? 80 : 60,
-                      color: Colors.grey,
-                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    AppImages.hurufKeKata[_currentHuruf] ?? '',
+                    _currentKata.isNotEmpty
+                        ? _currentKata.toUpperCase()
+                        : (AppImages.hurufKeKata[_currentHuruf] ?? ''),
                     style: TextStyle(
                       fontSize: isTablet ? 24 : 18,
                       fontWeight: FontWeight.bold,
@@ -858,15 +1077,22 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
           children: _choices.map((choice) {
             final isSelected = _selectedAnswer == choice;
             return _ScaleOptionButton(
-              onTap: (!_canAnswer || _answered) ? null : () => _checkAnswer(choice),
+              onTap: (!_canAnswer || _answered || _isSubmitting)
+                  ? null
+                  : () => setState(() => _selectedAnswer = choice),
               isSelected: isSelected,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(_answered && !isSelected ? 0.6 : 0.9),
+                  color: isSelected
+                      ? const Color(0xFFFFE082)
+                      : Colors.white
+                          .withOpacity(_answered && !isSelected ? 0.6 : 0.9),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: const Color(0xFF5A4FCF),
-                    width: 2,
+                    color: isSelected
+                        ? const Color(0xFFFFA000)
+                        : const Color(0xFF5A4FCF),
+                    width: isSelected ? 3 : 2,
                   ),
                 ),
                 child: Center(
@@ -876,13 +1102,25 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
                       fontSize: isTablet ? 36 : 28,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'Fredoka',
-                      color: const Color(0xFF5A4FCF).withOpacity(_answered && !isSelected ? 0.6 : 1.0),
+                      color: isSelected
+                          ? const Color(0xFF4A148C)
+                          : const Color(0xFF5A4FCF).withOpacity(
+                              _answered && !isSelected ? 0.6 : 1.0),
                     ),
                   ),
                 ),
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 20),
+        _buildSubmitButton(
+          isEnabled: _canAnswer &&
+              !_answered &&
+              !_isSubmitting &&
+              _selectedAnswer != null,
+          onSubmit: _handleSubmitAnswer,
+          isTablet: isTablet,
         ),
       ],
     );
@@ -925,20 +1163,18 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
-                  Image.asset(
-                    AppImages.hurufKeGambar[_currentHuruf] ?? '',
+                  MaterialImageWidget(
+                    word: _currentKata,
+                    huruf: _currentHuruf,
                     width: isTablet ? 120 : 80,
                     height: isTablet ? 100 : 70,
                     fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) => Icon(
-                      Icons.pets,
-                      size: isTablet ? 80 : 60,
-                      color: Colors.grey,
-                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    AppImages.hurufKeKata[_currentHuruf] ?? '',
+                    _currentKata.isNotEmpty
+                        ? _currentKata.toUpperCase()
+                        : (AppImages.hurufKeKata[_currentHuruf] ?? ''),
                     style: TextStyle(
                       fontSize: isTablet ? 20 : 16,
                       fontWeight: FontWeight.bold,
@@ -956,26 +1192,40 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(kata.length, (i) {
             final isHidden = i == hiddenIndex;
+            final isFilledTentative = isHidden && _selectedAnswer != null;
+            final displayText = isHidden
+                ? (_selectedAnswer != null
+                    ? _selectedAnswer!.toUpperCase()
+                    : '?')
+                : kata[i].toUpperCase();
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 4),
               width: isTablet ? 64 : 40,
               height: isTablet ? 74 : 48,
               decoration: BoxDecoration(
-                color: isHidden ? const Color(0xFFFFD966).withOpacity(0.9) : Colors.white.withOpacity(0.9),
+                color: isHidden
+                    ? (isFilledTentative
+                        ? const Color(0xFFFFD54F)
+                        : const Color(0xFFFFD966).withOpacity(0.9))
+                    : Colors.white.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isHidden ? const Color(0xFFFFAA00) : const Color(0xFF5A4FCF),
-                  width: 2,
+                  color: isHidden
+                      ? const Color(0xFFFFAA00)
+                      : const Color(0xFF5A4FCF),
+                  width: isFilledTentative ? 3 : 2,
                 ),
               ),
               child: Center(
                 child: Text(
-                  isHidden ? '?' : kata[i].toUpperCase(),
+                  displayText,
                   style: TextStyle(
                     fontSize: isTablet ? 40 : 22,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Fredoka',
-                    color: isHidden ? const Color(0xFFFFAA00) : const Color(0xFF5A4FCF),
+                    color: isHidden
+                        ? const Color(0xFF6A1B9A)
+                        : const Color(0xFF5A4FCF),
                   ),
                 ),
               ),
@@ -1010,15 +1260,22 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
           children: _choices.map((choice) {
             final isSelected = _selectedAnswer == choice;
             return _ScaleOptionButton(
-              onTap: (!_canAnswer || _answered) ? null : () => _checkAnswer(choice),
+              onTap: (!_canAnswer || _answered || _isSubmitting)
+                  ? null
+                  : () => setState(() => _selectedAnswer = choice),
               isSelected: isSelected,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(_answered && !isSelected ? 0.6 : 0.9),
+                  color: isSelected
+                      ? const Color(0xFFFFE082)
+                      : Colors.white
+                          .withOpacity(_answered && !isSelected ? 0.6 : 0.9),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: const Color(0xFF5A4FCF),
-                    width: 2,
+                    color: isSelected
+                        ? const Color(0xFFFFA000)
+                        : const Color(0xFF5A4FCF),
+                    width: isSelected ? 3 : 2,
                   ),
                 ),
                 child: Center(
@@ -1028,13 +1285,25 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
                       fontSize: isTablet ? 36 : 28,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'Fredoka',
-                      color: const Color(0xFF5A4FCF).withOpacity(_answered && !isSelected ? 0.6 : 1.0),
+                      color: isSelected
+                          ? const Color(0xFF4A148C)
+                          : const Color(0xFF5A4FCF).withOpacity(
+                              _answered && !isSelected ? 0.6 : 1.0),
                     ),
                   ),
                 ),
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 20),
+        _buildSubmitButton(
+          isEnabled: _canAnswer &&
+              !_answered &&
+              !_isSubmitting &&
+              _selectedAnswer != null,
+          onSubmit: _handleSubmitAnswer,
+          isTablet: isTablet,
         ),
       ],
     );
@@ -1063,7 +1332,11 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 12),
         GestureDetector(
-          onTap: () => AudioService().playSFX(AppAudio.kata(_currentKata)),
+          onTap: () async {
+            final audioUrl =
+                await MaterialService().resolveWordAudioUrl(_currentKata);
+            AudioService().playSFX(audioUrl);
+          },
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -1076,20 +1349,18 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   children: [
-                    Image.asset(
-                      AppImages.hurufKeGambar[_currentHuruf] ?? '',
+                    MaterialImageWidget(
+                      word: _currentKata,
+                      huruf: _currentHuruf,
                       width: isTablet ? 120 : 80,
                       height: isTablet ? 100 : 70,
                       fit: BoxFit.contain,
-                      errorBuilder: (c, e, s) => Icon(
-                        Icons.pets,
-                        size: isTablet ? 80 : 60,
-                        color: Colors.grey,
-                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      AppImages.hurufKeKata[_currentHuruf] ?? '',
+                      _currentKata.isNotEmpty
+                          ? _currentKata.toUpperCase()
+                          : (AppImages.hurufKeKata[_currentHuruf] ?? ''),
                       style: TextStyle(
                         fontSize: isTablet ? 20 : 16,
                         fontWeight: FontWeight.bold,
@@ -1105,7 +1376,11 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 8),
         GestureDetector(
-          onTap: () => AudioService().playSFX(AppAudio.kata(_currentKata)),
+          onTap: () async {
+            final audioUrl =
+                await MaterialService().resolveWordAudioUrl(_currentKata);
+            AudioService().playSFX(audioUrl);
+          },
           child: Image.asset(
             AppImages.icSound,
             width: isTablet ? 56 : 46,
@@ -1121,7 +1396,9 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
               width: isTablet ? 64 : 40,
               height: isTablet ? 64 : 40,
               decoration: BoxDecoration(
-                color: _userAnswer.length > i ? const Color(0xFF7F77DD) : Colors.white.withOpacity(0.85),
+                color: _userAnswer.length > i
+                    ? const Color(0xFF7F77DD)
+                    : Colors.white.withOpacity(0.85),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: const Color(0xFF5A4FCF),
@@ -1152,22 +1429,21 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
             final letter = entry.value;
             final isUsed = _selectedIndices.contains(i);
             return _ScaleOptionButton(
-              onTap: isUsed || _answered || !_canAnswer
+              onTap: isUsed || _answered || _isSubmitting || !_canAnswer
                   ? null
                   : () {
                       setState(() {
                         _selectedIndices.add(i);
                         _userAnswer.add(letter);
-                        if (_userAnswer.length == _currentKata.length) {
-                          _checkAnswer(_userAnswer.join(''));
-                        }
                       });
                     },
               child: Container(
                 width: isTablet ? 60 : 40,
                 height: isTablet ? 70 : 48,
                 decoration: BoxDecoration(
-                  color: isUsed ? Colors.grey.withOpacity(0.4) : const Color(0xFFFFD966).withOpacity(0.9),
+                  color: isUsed
+                      ? Colors.grey.withOpacity(0.4)
+                      : const Color(0xFFFFD966).withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isUsed ? Colors.grey : const Color(0xFFFFAA00),
@@ -1189,20 +1465,38 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
             );
           }).toList(),
         ),
-        const SizedBox(height: 12),
-        if (_userAnswer.isNotEmpty && !_answered && _canAnswer)
-          AssetButton(
-            normalAsset: AppImages.btnDeleteNormal,
-            pressedAsset: AppImages.btnDeletePressed,
-            onTap: () {
-              setState(() {
-                _userAnswer.removeLast();
-                _selectedIndices.removeLast();
-              });
-            },
-            width: isTablet ? 160 : 80,
-            height: isTablet ? 75 : 40,
-          ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_userAnswer.isNotEmpty &&
+                !_answered &&
+                !_isSubmitting &&
+                _canAnswer) ...[
+              AssetButton(
+                normalAsset: AppImages.btnDeleteNormal,
+                pressedAsset: AppImages.btnDeletePressed,
+                onTap: () {
+                  setState(() {
+                    _userAnswer.removeLast();
+                    _selectedIndices.removeLast();
+                  });
+                },
+                width: isTablet ? 140 : 90,
+                height: isTablet ? 64 : 44,
+              ),
+              const SizedBox(width: 16),
+            ],
+            _buildSubmitButton(
+              isEnabled: _canAnswer &&
+                  !_answered &&
+                  !_isSubmitting &&
+                  _userAnswer.length == _currentKata.length,
+              onSubmit: _handleSubmitAnswer,
+              isTablet: isTablet,
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1300,15 +1594,22 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
           children: _choices.map((choice) {
             final isSelected = _selectedAnswer == choice;
             return _ScaleOptionButton(
-              onTap: (!_canAnswer || _answered) ? null : () => _checkAnswer(choice),
+              onTap: (!_canAnswer || _answered || _isSubmitting)
+                  ? null
+                  : () => setState(() => _selectedAnswer = choice),
               isSelected: isSelected,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(_answered && !isSelected ? 0.6 : 0.9),
+                  color: isSelected
+                      ? const Color(0xFFFFE082)
+                      : Colors.white
+                          .withOpacity(_answered && !isSelected ? 0.6 : 0.9),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: const Color(0xFF5A4FCF),
-                    width: 2,
+                    color: isSelected
+                        ? const Color(0xFFFFA000)
+                        : const Color(0xFF5A4FCF),
+                    width: isSelected ? 3 : 2,
                   ),
                 ),
                 child: Center(
@@ -1318,13 +1619,25 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
                       fontSize: isTablet ? 56 : 48,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'Fredoka',
-                      color: const Color(0xFF5A4FCF).withOpacity(_answered && !isSelected ? 0.6 : 1.0),
+                      color: isSelected
+                          ? const Color(0xFF4A148C)
+                          : const Color(0xFF5A4FCF).withOpacity(
+                              _answered && !isSelected ? 0.6 : 1.0),
                     ),
                   ),
                 ),
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 20),
+        _buildSubmitButton(
+          isEnabled: _canAnswer &&
+              !_answered &&
+              !_isSubmitting &&
+              _selectedAnswer != null,
+          onSubmit: _handleSubmitAnswer,
+          isTablet: isTablet,
         ),
       ],
     );
@@ -1377,22 +1690,21 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
             final letter = entry.value;
             final isUsed = _selectedIndices.contains(i);
             return _ScaleOptionButton(
-              onTap: isUsed || _answered || !_canAnswer
+              onTap: isUsed || _answered || _isSubmitting || !_canAnswer
                   ? null
                   : () {
                       setState(() {
                         _selectedIndices.add(i);
                         _userAnswer.add(letter);
-                        if (_userAnswer.length == _shuffledLetters.length) {
-                          _checkAnswer(_userAnswer.join(''));
-                        }
                       });
                     },
               child: Container(
                 width: isTablet ? 75 : 50,
                 height: isTablet ? 75 : 50,
                 decoration: BoxDecoration(
-                  color: isUsed ? Colors.grey.withOpacity(0.4) : const Color(0xFFFFD966).withOpacity(0.9),
+                  color: isUsed
+                      ? Colors.grey.withOpacity(0.4)
+                      : const Color(0xFFFFD966).withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isUsed ? Colors.grey : const Color(0xFFFFAA00),
@@ -1439,10 +1751,13 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
               width: isTablet ? 80 : 46,
               height: isTablet ? 85 : 50,
               decoration: BoxDecoration(
-                color: _userAnswer.length > i ? const Color(0xFF7F77DD) : Colors.white.withOpacity(0.5),
+                color: _userAnswer.length > i
+                    ? const Color(0xFF7F77DD)
+                    : Colors.white.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: const Color(0xFF5A4FCF).withOpacity(_userAnswer.length > i ? 1.0 : 0.4),
+                  color: const Color(0xFF5A4FCF)
+                      .withOpacity(_userAnswer.length > i ? 1.0 : 0.4),
                   width: 2,
                 ),
               ),
@@ -1460,20 +1775,38 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
             );
           }),
         ),
-        const SizedBox(height: 12),
-        if (_userAnswer.isNotEmpty && !_answered && _canAnswer)
-          AssetButton(
-            normalAsset: AppImages.btnDeleteNormal,
-            pressedAsset: AppImages.btnDeletePressed,
-            onTap: () {
-              setState(() {
-                _userAnswer.removeLast();
-                _selectedIndices.removeLast();
-              });
-            },
-            width: isTablet ? 160 : 80,
-            height: isTablet ? 75 : 40,
-          ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_userAnswer.isNotEmpty &&
+                !_answered &&
+                !_isSubmitting &&
+                _canAnswer) ...[
+              AssetButton(
+                normalAsset: AppImages.btnDeleteNormal,
+                pressedAsset: AppImages.btnDeletePressed,
+                onTap: () {
+                  setState(() {
+                    _userAnswer.removeLast();
+                    _selectedIndices.removeLast();
+                  });
+                },
+                width: isTablet ? 140 : 90,
+                height: isTablet ? 64 : 44,
+              ),
+              const SizedBox(width: 16),
+            ],
+            _buildSubmitButton(
+              isEnabled: _canAnswer &&
+                  !_answered &&
+                  !_isSubmitting &&
+                  _userAnswer.length == _shuffledLetters.length,
+              onSubmit: _handleSubmitAnswer,
+              isTablet: isTablet,
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1491,159 +1824,190 @@ class _StageScreenState extends State<StageScreen> with WidgetsBindingObserver {
         }
       },
       child: BgScaffold(
-      backgroundAsset: AppImages.bgInStage,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          final screenHeight = constraints.maxHeight;
+        backgroundAsset: AppImages.bgInStage,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final screenWidth = constraints.maxWidth;
 
-          return Stack(
-            children: [
-              // 1. TOMBOL BACK pojok kiri atas
-              Positioned(
-                top: screenWidth >= 600 ? 45 : 10,
-                left: 16,
-                child: AssetButton(
-                  normalAsset: AppImages.btnBackNormal,
-                  pressedAsset: AppImages.btnBackPressed,
-                  onTap: () {
-                    _saveCurrentDraft();
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go('/stage-map');
-                    }
-                  },
-                  width: screenWidth >= 600 ? 120 : 80,
-                  height: screenWidth >= 600 ? 66 : 44,
+            return Stack(
+              children: [
+                // 1. TOMBOL BACK pojok kiri atas
+                Positioned(
+                  top: screenWidth >= 600 ? 45 : 10,
+                  left: 16,
+                  child: AssetButton(
+                    normalAsset: AppImages.btnBackNormal,
+                    pressedAsset: AppImages.btnBackPressed,
+                    onTap: () {
+                      _saveCurrentDraft();
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/stage-map');
+                      }
+                    },
+                    width: screenWidth >= 600 ? 120 : 80,
+                    height: screenWidth >= 600 ? 66 : 44,
+                  ),
                 ),
-              ),
 
-              // 2. PROGRESS BAR soal (left: 110 & right: 110 untuk mencegah overlap dengan tombol back & skor)
-              Positioned(
-                top: screenWidth >= 600 ? 55 : 10,
-                left: screenWidth >= 600 ? 180 : 110,
-                right: screenWidth >= 600 ? 180 : 110,
-                child: Column(
-                  children: [
-                    Text(
-                      'Soal ${_currentQuestion + 1} dari $_totalQuestions',
-                      style: TextStyle(
-                        fontSize: screenWidth >= 600 ? 22 : 14,
-                        fontFamily: 'Fredoka',
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            blurRadius: 4,
-                            color: Colors.black45,
-                          )
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    LinearProgressIndicator(
-                      value: _totalQuestions > 0 ? (_currentQuestion + 1) / _totalQuestions : 0.0,
-                      backgroundColor: Colors.white.withOpacity(0.3),
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF5A4FCF)),
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 3. SKOR & NOMOR STAGE pojok kanan atas
-              Positioned(
-                top: screenWidth >= 600 ? 60 : 25,
-                right: 16,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF5A4FCF).withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Image.asset(
-                            AppImages.icStar,
-                            width: 20,
-                            height: 20,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$_score',
-                            style: TextStyle(
-                              fontSize: screenWidth >= 600 ? 26 : 16,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Fredoka',
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: EdgeInsets.only(
-                        top: screenWidth >= 600 ? 48 : 51, 
-                        right: screenWidth >= 600 ? 70 : 24,
-                      ),
-                      child: Text(
-                        '${_currentQuestion + 1}',
+                // 2. PROGRESS BAR soal (left: 110 & right: 110 untuk mencegah overlap dengan tombol back & skor)
+                Positioned(
+                  top: screenWidth >= 600 ? 55 : 10,
+                  left: screenWidth >= 600 ? 180 : 110,
+                  right: screenWidth >= 600 ? 180 : 110,
+                  child: Column(
+                    children: [
+                      Text(
+                        'Soal ${_currentQuestion + 1} dari $_totalQuestions',
                         style: TextStyle(
-                          fontSize: screenWidth >= 600 ? 36 : 22,
-                          fontWeight: FontWeight.bold,
+                          fontSize: screenWidth >= 600 ? 22 : 14,
                           fontFamily: 'Fredoka',
                           color: Colors.white,
+                          fontWeight: FontWeight.bold,
                           shadows: [
-                            Shadow(blurRadius: 0, color: Colors.black87, offset: Offset(-2, -2)),
-                            Shadow(blurRadius: 0, color: Colors.black87, offset: Offset(2, -2)),
-                            Shadow(blurRadius: 0, color: Colors.black87, offset: Offset(-2, 2)),
-                            Shadow(blurRadius: 0, color: Colors.black87, offset: Offset(2, 2)),
-                            Shadow(blurRadius: 6, color: Colors.black54, offset: Offset(0, 0)),
+                            Shadow(
+                              blurRadius: 4,
+                              color: Colors.black45,
+                            )
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: _totalQuestions > 0
+                            ? (_currentQuestion + 1) / _totalQuestions
+                            : 0.0,
+                        backgroundColor: Colors.white.withOpacity(0.3),
+                        valueColor:
+                            const AlwaysStoppedAnimation(Color(0xFF5A4FCF)),
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-              // 4. AREA SOAL
-              Positioned(
-                top: screenWidth >= 600 ? 120 : 75,
-                left: 16,
-                right: 16,
-                bottom: 12,
-                child: _buildQuestionWidget(),
-              ),
+                // 3. SKOR & NOMOR STAGE pojok kanan atas
+                Positioned(
+                  top: screenWidth >= 600 ? 60 : 25,
+                  right: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF5A4FCF).withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Image.asset(
+                              AppImages.icStar,
+                              width: 20,
+                              height: 20,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$_score',
+                              style: TextStyle(
+                                fontSize: screenWidth >= 600 ? 26 : 16,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Fredoka',
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: screenWidth >= 600 ? 48 : 51,
+                          right: screenWidth >= 600 ? 70 : 24,
+                        ),
+                        child: Text(
+                          '${_currentQuestion + 1}',
+                          style: TextStyle(
+                            fontSize: screenWidth >= 600 ? 36 : 22,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Fredoka',
+                            color: Colors.white,
+                            shadows: const [
+                              Shadow(
+                                  blurRadius: 0,
+                                  color: Colors.black87,
+                                  offset: Offset(-2, -2)),
+                              Shadow(
+                                  blurRadius: 0,
+                                  color: Colors.black87,
+                                  offset: Offset(2, -2)),
+                              Shadow(
+                                  blurRadius: 0,
+                                  color: Colors.black87,
+                                  offset: Offset(-2, 2)),
+                              Shadow(
+                                  blurRadius: 0,
+                                  color: Colors.black87,
+                                  offset: Offset(2, 2)),
+                              Shadow(
+                                  blurRadius: 6,
+                                  color: Colors.black54,
+                                  offset: Offset.zero),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
-              // 5. POPUP HASIL
-              if (_showResult)
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black45,
-                    child: Center(
-                      child: Image.asset(
-                        _isCorrect ? AppImages.popupCorrect : AppImages.popupTryAgain,
-                        width: screenWidth * 0.65,
-                        fit: BoxFit.fitWidth,
+                // 4. AREA SOAL (posisi seimbang agar pas di tengah jalan dan tidak menempel bar atas/bawah)
+                Positioned(
+                  top: screenWidth >= 600 ? 130 : 95,
+                  left: 16,
+                  right: 16,
+                  bottom: 8,
+                  child: _buildQuestionWidget(),
+                ),
+
+                // 5. POPUP HASIL
+                if (_showResult)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black45,
+                      child: Center(
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0.6, end: 1.0),
+                          duration: const Duration(milliseconds: 350),
+                          curve: Curves.easeOutBack,
+                          builder: (context, scale, child) {
+                            return Transform.scale(
+                              scale: scale,
+                              child: child,
+                            );
+                          },
+                          child: Image.asset(
+                            _isCorrect
+                                ? AppImages.popupCorrect
+                                : AppImages.popupTryAgain,
+                            width: screenWidth * 0.65,
+                            fit: BoxFit.fitWidth,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
-    ),
-  );
+    );
   }
 }
 
@@ -1675,14 +2039,18 @@ class _ScaleOptionButtonState extends State<_ScaleOptionButton> {
     }
 
     return GestureDetector(
-      onTapDown: widget.onTap == null ? null : (_) => setState(() => _isPressed = true),
+      onTapDown: widget.onTap == null
+          ? null
+          : (_) => setState(() => _isPressed = true),
       onTapUp: widget.onTap == null
           ? null
           : (_) {
               setState(() => _isPressed = false);
               widget.onTap?.call();
             },
-      onTapCancel: widget.onTap == null ? null : () => setState(() => _isPressed = false),
+      onTapCancel: widget.onTap == null
+          ? null
+          : () => setState(() => _isPressed = false),
       child: AnimatedScale(
         scale: scale,
         duration: const Duration(milliseconds: 150),

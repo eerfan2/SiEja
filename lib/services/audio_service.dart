@@ -1,6 +1,7 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'dart:convert';
 
 class AudioService {
   // Singleton instance
@@ -176,9 +177,18 @@ class AudioService {
       }
       await _sfxPlayer.stop();
       await _sfxPlayer.setVolume(1.0);
-      await _sfxPlayer.play(
-        AssetSource(path.replaceFirst('assets/', '')),
-      );
+      final Source source;
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        source = UrlSource(path);
+      } else if (path.startsWith('data:audio/')) {
+        final commaIndex = path.indexOf(',');
+        final base64String = commaIndex != -1 ? path.substring(commaIndex + 1) : path;
+        final bytes = base64Decode(base64String);
+        source = BytesSource(bytes);
+      } else {
+        source = AssetSource(path.replaceFirst('assets/', ''));
+      }
+      await _sfxPlayer.play(source);
       _sfxSubscription?.cancel();
       _sfxSubscription = _sfxPlayer.onPlayerComplete.listen((_) {
         if (_isBgmEnabled) {

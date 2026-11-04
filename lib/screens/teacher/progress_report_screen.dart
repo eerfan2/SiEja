@@ -7,6 +7,8 @@ import 'package:si_eja/services/firebase_service.dart';
 import 'package:si_eja/services/progress_service.dart';
 import 'package:si_eja/widgets/asset_button.dart';
 import 'package:si_eja/widgets/bg_scaffold.dart';
+import 'package:si_eja/services/stage_service.dart';
+import 'package:si_eja/widgets/generic_stage_badge.dart';
 
 class ProgressReportScreen extends StatefulWidget {
   const ProgressReportScreen({super.key});
@@ -38,6 +40,7 @@ class _ProgressReportScreenState extends State<ProgressReportScreen> {
     setState(() => _isLoading = true);
 
     final firebaseStudents = await FirebaseService().getAllSiswa();
+    final stageModels = await StageService().getStages();
     final progressService = ProgressService();
     final currentSiswaId = progressService.currentSiswaId;
 
@@ -51,7 +54,8 @@ class _ProgressReportScreenState extends State<ProgressReportScreen> {
       int totalSkor = 0;
       int stageAktif = 1;
 
-      for (int i = 1; i <= 6; i++) {
+      for (final model in stageModels) {
+        final i = model.number;
         final stageData = progressMap['stage$i'] as Map<String, dynamic>?;
 
         String status = stageData?['status'] ?? (i == 1 ? 'unlocked' : 'locked');
@@ -243,15 +247,25 @@ class _ProgressReportScreenState extends State<ProgressReportScreen> {
                                     ),
                                     child: Row(
                                       children: [
-                                        Image.asset(
-                                          AppImages.stageIcon(status, stage['id'] as int),
-                                          width: isTablet
-                                              ? TabletLayout.progressPopupStageIconSize
-                                              : 32,
-                                          height: isTablet
-                                              ? TabletLayout.progressPopupStageIconSize
-                                              : 32,
-                                        ),
+                                        AppImages.hasStageIcon(stage['id'] as int)
+                                            ? Image.asset(
+                                                AppImages.stageIcon(
+                                                    status, stage['id'] as int),
+                                                width: isTablet
+                                                    ? TabletLayout.progressPopupStageIconSize
+                                                    : 32,
+                                                height: isTablet
+                                                    ? TabletLayout.progressPopupStageIconSize
+                                                    : 32,
+                                              )
+                                            : GenericStageBadge(
+                                                stageNumber: stage['id'] as int,
+                                                status: status,
+                                                isTablet: isTablet,
+                                                size: isTablet
+                                                    ? TabletLayout.progressPopupStageIconSize
+                                                    : 32,
+                                              ),
                                         SizedBox(width: isTablet ? 14 : 10),
                                         Expanded(
                                           child: Column(

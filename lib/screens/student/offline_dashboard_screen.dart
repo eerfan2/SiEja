@@ -643,14 +643,36 @@ class _OfflineDashboardScreenState extends State<OfflineDashboardScreen> {
                         Positioned(
                           bottom: isTablet ? StudentTabletLayout.navbarIconBottom : 18,
                           left: screenWidth * (isTablet ? StudentTabletLayout.navbarProfileLeftFactor : 0.15),
-                          child: GestureDetector(
-                            onTap: () => context.push('/offline-profile'),
-                            child: Image.asset(
-                              AppImages.icProfileManDefault,
-                              width: isTablet ? StudentTabletLayout.navbarIconSize : 38,
-                              height: isTablet ? StudentTabletLayout.navbarIconSize : 38,
-                            ),
-                          ),
+                          child: () {
+                            bool isPressed = false;
+                            return StatefulBuilder(
+                              builder: (context, setState) {
+                                return GestureDetector(
+                                  onTapDown: (_) =>
+                                      setState(() => isPressed = true),
+                                  onTapUp: (_) async {
+                                    setState(() => isPressed = false);
+                                    await Future.delayed(
+                                        const Duration(milliseconds: 100));
+                                    if (context.mounted) {
+                                      context.push('/offline-profile');
+                                    }
+                                  },
+                                  onTapCancel: () =>
+                                      setState(() => isPressed = false),
+                                  child: AnimatedScale(
+                                    scale: isPressed ? 1.25 : 1.0,
+                                    duration: const Duration(milliseconds: 150),
+                                    child: Image.asset(
+                                      AppImages.icProfileManDefault,
+                                      width: isTablet ? StudentTabletLayout.navbarIconSize : 38,
+                                      height: isTablet ? StudentTabletLayout.navbarIconSize : 38,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          }(),
                         ),
                         // Maskot tengah
                         Positioned(
@@ -665,14 +687,36 @@ class _OfflineDashboardScreenState extends State<OfflineDashboardScreen> {
                         Positioned(
                           bottom: isTablet ? StudentTabletLayout.navbarIconBottom : 18,
                           right: screenWidth * (isTablet ? StudentTabletLayout.navbarSettingsRightFactor : 0.15),
-                          child: GestureDetector(
-                            onTap: () => context.push('/offline-settings'),
-                            child: Image.asset(
-                              AppImages.icSettings,
-                              width: isTablet ? StudentTabletLayout.navbarIconSize : 38,
-                              height: isTablet ? StudentTabletLayout.navbarIconSize : 38,
-                            ),
-                          ),
+                          child: () {
+                            bool isPressed = false;
+                            return StatefulBuilder(
+                              builder: (context, setState) {
+                                return GestureDetector(
+                                  onTapDown: (_) =>
+                                      setState(() => isPressed = true),
+                                  onTapUp: (_) async {
+                                    setState(() => isPressed = false);
+                                    await Future.delayed(
+                                        const Duration(milliseconds: 100));
+                                    if (context.mounted) {
+                                      context.push('/offline-settings');
+                                    }
+                                  },
+                                  onTapCancel: () =>
+                                      setState(() => isPressed = false),
+                                  child: AnimatedScale(
+                                    scale: isPressed ? 1.25 : 1.0,
+                                    duration: const Duration(milliseconds: 150),
+                                    child: Image.asset(
+                                      AppImages.icSettings,
+                                      width: isTablet ? StudentTabletLayout.navbarIconSize : 38,
+                                      height: isTablet ? StudentTabletLayout.navbarIconSize : 38,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          }(),
                         ),
                       ],
                     ),

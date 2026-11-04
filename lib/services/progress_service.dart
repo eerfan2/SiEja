@@ -1,6 +1,11 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:si_eja/services/firebase_service.dart';
+enum StageAccessResult {
+  allowed,
+  lockedByTeacher,
+  prevStageIncomplete,
+}
 
 class ProgressService {
   // Singleton pattern
@@ -74,18 +79,23 @@ class ProgressService {
   // Sinkronisasi data progress dari Firebase milik siswa yang sedang login
   Future<void> loadStudentProgressFromFirebase(Map<String, dynamic> siswaData) async {
     final progress = siswaData['progress'] as Map<String, dynamic>? ?? {};
-    for (int stageId = 1; stageId <= 6; stageId++) {
-      final stageKey = 'stage$stageId';
-      if (progress.containsKey(stageKey) && progress[stageKey] != null) {
-        final stageData = Map<String, dynamic>.from(progress[stageKey]);
+
+    // 1. Simpan semua stage yang ada di progress dokumen Firestore
+    for (final entry in progress.entries) {
+      final match = RegExp(r'^stage(\d+)$').firstMatch(entry.key);
+      if (match != null && entry.value != null) {
+        final stageId = int.parse(match.group(1)!);
+        final stageData = Map<String, dynamic>.from(entry.value);
         final skor = (stageData['skor'] as num?)?.toInt() ?? 0;
-        final status = stageData['status'] as String? ?? 'locked';
+        final status = stageData['status'] as String? ?? (stageId == 1 ? 'unlocked' : 'locked');
         await _prefs.setInt(_getScoreKey(stageId), skor);
         await _prefs.setString(_getStatusKey(stageId), status);
-      } else {
-        await _prefs.remove(_getScoreKey(stageId));
-        await _prefs.remove(_getStatusKey(stageId));
       }
+    }
+
+    // 2. Pastikan minimal default stage 1 memiliki status jika belum ada
+    if (!progress.containsKey('stage1') && _prefs.getString(_getStatusKey(1)) == null) {
+      await _prefs.setString(_getStatusKey(1), 'unlocked');
     }
   }
 
@@ -95,12 +105,16 @@ class ProgressService {
     await _prefs.setString(_getStatusKey(stageId), 'completed');
 
     if (_currentSiswaId.isNotEmpty) {
-      await FirebaseService().saveProgress(
-        _currentSiswaId,
-        stageId,
-        score,
-        'completed',
-      );
+      try {
+        await FirebaseService().saveProgress(
+          _currentSiswaId,
+          stageId,
+          score,
+          'completed',
+        );
+      } catch (_) {
+        // Fallback aman untuk offline atau saat Firebase belum diinisialisasi
+      }
     }
   }
 
@@ -119,8 +133,42 @@ class ProgressService {
 
   bool isStageUnlocked(int stageId) {
     final status = getStageStatus(stageId);
-    // Stage bisa diakses jika statusnya unlocked atau completed
+    // Stage terbuka jika statusnya unlocked atau completed
     return status == 'unlocked' || status == 'completed';
+  }
+
+  /// Aturan akses Stage SiEja (Fase 3):
+  /// - Stage 1: mempertahankan perilaku lama (dapat dimainkan jika tidak dikunci guru).
+  /// - Stage N > 1: Siswa HANYA dapat bermain jika:
+  ///   1. Guru telah membuka Stage N (status bukan 'locked'); DAN
+  ///   2. Stage N - 1 telah diselesaikan siswa (status 'completed').
+  bool canPlayStage(int stageId) {
+    if (stageId <= 0) return false;
+    if (stageId == 1) {
+      return getStageStatus(1) != 'locked';
+    }
+    final teacherUnlocked = getStageStatus(stageId) != 'locked';
+    final prevCompleted = getStageStatus(stageId - 1) == 'completed';
+    return teacherUnlocked && prevCompleted;
+  }
+
+  /// Memeriksa alasan status akses stage untuk memberikan dialog edukatif yang tepat.
+  StageAccessResult checkStageAccess(int stageId) {
+    if (stageId <= 0) return StageAccessResult.lockedByTeacher;
+    if (stageId == 1) {
+      return getStageStatus(1) == 'locked'
+          ? StageAccessResult.lockedByTeacher
+          : StageAccessResult.allowed;
+    }
+    final teacherUnlocked = getStageStatus(stageId) != 'locked';
+    if (!teacherUnlocked) {
+      return StageAccessResult.lockedByTeacher;
+    }
+    final prevCompleted = getStageStatus(stageId - 1) == 'completed';
+    if (!prevCompleted) {
+      return StageAccessResult.prevStageIncomplete;
+    }
+    return StageAccessResult.allowed;
   }
 
   // HANYA guru yang memanggil method ini

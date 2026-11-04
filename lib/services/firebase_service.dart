@@ -35,6 +35,36 @@ class FirebaseService {
     }
   }
 
+  // Ubah kata sandi guru yang sedang login
+  Future<String?> ubahKataSandiGuru(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null || user.email == null) {
+        return 'Sesi login guru tidak ditemukan. Silakan login kembali.';
+      }
+
+      final cred = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword.trim(),
+      );
+      await user.reauthenticateWithCredential(cred);
+      await user.updatePassword(newPassword.trim());
+      return null; // Berhasil
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        return 'Kata sandi saat ini yang Anda masukkan salah.';
+      } else if (e.code == 'weak-password') {
+        return 'Kata sandi baru terlalu lemah (minimal 6 karakter).';
+      }
+      return 'Gagal mengubah kata sandi: ${e.message}';
+    } catch (e) {
+      return 'Terjadi kesalahan: $e';
+    }
+  }
+
   // Cek apakah guru sudah login
   bool get isGuruLoggedIn => _auth.currentUser != null;
 
@@ -57,6 +87,16 @@ class FirebaseService {
 
       if (existing.docs.isNotEmpty) {
         return 'Username sudah digunakan!';
+      }
+
+      // Cek PIN sudah digunakan siswa lain atau belum
+      final existingPin = await _firestore
+          .collection('siswa')
+          .where('pin', isEqualTo: pin.trim())
+          .get();
+
+      if (existingPin.docs.isNotEmpty) {
+        return 'PIN ${pin.trim()} sudah digunakan siswa lain!';
       }
 
       final docRef = await _firestore.collection('siswa').add({
@@ -89,6 +129,131 @@ class FirebaseService {
         debugPrint('Tambah siswa error: $e');
       }
       return 'Gagal menambahkan siswa: $e';
+    }
+  }
+
+  // Edit data siswa (Return null jika sukses, atau pesan error jika gagal)
+  Future<String?> editSiswa({
+    required String siswaId,
+    required String namaLengkap,
+    required String username,
+    required String pin,
+    required int usia,
+    required String jenisKelamin,
+    required String oldUsername,
+    required String oldPin,
+  }) async {
+    try {
+      // 1. Cek otorisasi guru
+      if (!isGuruLoggedIn) {
+        return 'Hanya guru yang berwenang untuk mengubah data siswa!';
+      }
+
+      final trimmedNama = namaLengkap.trim();
+      final trimmedUsername = username.trim();
+      final trimmedPin = pin.trim();
+
+      // 2. Validasi input
+      if (trimmedNama.isEmpty || trimmedUsername.isEmpty) {
+        return 'Nama lengkap dan username tidak boleh kosong!';
+      }
+      if (trimmedPin.length != 3 || int.tryParse(trimmedPin) == null) {
+        return 'PIN harus berupa 3 digit angka (contoh: 001)!';
+      }
+      if (usia <= 0) {
+        return 'Usia harus berupa angka positif!';
+      }
+
+      // 3. Cek keunikan username jika username diubah
+      if (trimmedUsername.toLowerCase() != oldUsername.trim().toLowerCase()) {
+        final existing = await _firestore
+            .collection('siswa')
+            .where('username', isEqualTo: trimmedUsername)
+            .get();
+
+        final isTakenByOther = existing.docs.any((doc) => doc.id != siswaId);
+        if (isTakenByOther) {
+          return 'Username sudah digunakan siswa lain!';
+        }
+      }
+
+      // 3b. Cek keunikan PIN jika PIN diubah
+      if (trimmedPin != oldPin.trim()) {
+        final existingPin = await _firestore
+            .collection('siswa')
+            .where('pin', isEqualTo: trimmedPin)
+            .get();
+
+        final isPinTaken = existingPin.docs.any((doc) => doc.id != siswaId);
+        if (isPinTaken) {
+          return 'PIN $trimmedPin sudah digunakan siswa lain!';
+        }
+      }
+
+      // 4. Hitung credential key lama dan baru
+      final oldCredentialKey =
+          CredentialHelper.generateCredentialKey(oldUsername, oldPin);
+      final newCredentialKey =
+          CredentialHelper.generateCredentialKey(trimmedUsername, trimmedPin);
+
+      // 4b. Pastikan kredensial tujuan pada login_siswa tidak digunakan oleh siswa lain
+      if (oldCredentialKey != newCredentialKey) {
+        final existingLoginDoc = await _firestore
+            .collection('login_siswa')
+            .doc(newCredentialKey)
+            .get();
+        if (existingLoginDoc.exists) {
+          final mappedSiswaId = existingLoginDoc.data()?['siswaId'];
+          if (mappedSiswaId != null && mappedSiswaId != siswaId) {
+            return 'Kredensial login (kombinasi username dan PIN) sudah digunakan oleh siswa lain!';
+          }
+        }
+      }
+
+      final batch = _firestore.batch();
+      final siswaDocRef = _firestore.collection('siswa').doc(siswaId);
+
+      // 5. Update parsial dokumen siswa (MEMPERTAHANKAN progress, createdAt, dan id)
+      batch.update(siswaDocRef, {
+        'namaLengkap': trimmedNama,
+        'username': trimmedUsername,
+        'pin': trimmedPin,
+        'usia': usia,
+        'jenisKelamin': jenisKelamin.toLowerCase(),
+      });
+
+      // 6. Sinkronisasi mapping login_siswa secara atomik
+      if (oldCredentialKey != newCredentialKey) {
+        batch.delete(_firestore.collection('login_siswa').doc(oldCredentialKey));
+        batch.set(_firestore.collection('login_siswa').doc(newCredentialKey), {
+          'siswaId': siswaId,
+          'username': trimmedUsername.toLowerCase(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        batch.set(
+          _firestore.collection('login_siswa').doc(newCredentialKey),
+          {
+            'siswaId': siswaId,
+            'username': trimmedUsername.toLowerCase(),
+            'createdAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      await batch.commit();
+      return null; // Sukses
+    } on FirebaseException catch (e) {
+      if (kDebugMode) {
+        debugPrint('Edit siswa FirebaseException: ${e.code}');
+      }
+      return 'Gagal memperbarui data siswa: ${e.code}';
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Edit siswa error: $e');
+      }
+      return 'Gagal memperbarui data siswa: $e';
     }
   }
 

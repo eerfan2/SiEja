@@ -1,9 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:si_eja/core/app_constants.dart';
 import 'package:si_eja/core/responsive_helper.dart';
 import 'package:si_eja/services/audio_service.dart';
-import 'package:si_eja/services/firebase_service.dart';
 import 'package:si_eja/services/progress_service.dart';
 import 'package:si_eja/widgets/bg_scaffold.dart';
 
@@ -14,9 +15,12 @@ class StudentDashboardScreen extends StatefulWidget {
   State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
 }
 
-class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+class _StudentDashboardScreenState extends State<StudentDashboardScreen>
+    with TickerProviderStateMixin {
   String _studentName = '';
   bool _isPerempuan = false;
+  late AnimationController _breatheController;
+  late AnimationController _entranceController;
 
   @override
   void initState() {
@@ -24,9 +28,30 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     _studentName = ProgressService().getStudentName();
     if (_studentName.isEmpty) _studentName = 'Siswa';
     _isPerempuan = ProgressService().currentJenisKelamin == 'perempuan';
+
+
+
+    // Animasi bernapas (mengembang-mengempis) santai dan lembut khusus untuk 4 menu utama
+    _breatheController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3800),
+    )..repeat();
+
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await AudioService().playBGM(AppAudio.bgmHome);
     });
+  }
+
+  @override
+  void dispose() {
+    _breatheController.dispose();
+    _entranceController.dispose();
+    super.dispose();
   }
 
   Widget _buildMenuCard({
@@ -34,64 +59,92 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     required String label,
     required VoidCallback onTap,
     required bool isTablet,
+    required int index,
   }) {
+    final start = (index * 0.12).clamp(0.0, 1.0);
+    final end = (start + 0.50).clamp(0.0, 1.0);
+    final entranceAnim = CurvedAnimation(
+      parent: _entranceController,
+      curve: Interval(start, end, curve: Curves.easeOutBack),
+    );
+
     bool isPressed = false;
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return GestureDetector(
-          onTapDown: (_) => setState(() => isPressed = true),
-          onTapUp: (_) {
-            setState(() => isPressed = false);
-            onTap();
-          },
-          onTapCancel: () => setState(() => isPressed = false),
-          child: AnimatedScale(
-            scale: isPressed ? 1.15 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  icon,
-                  width: isTablet ? StudentTabletLayout.dashboardMenuIconSize : 110,
-                  height: isTablet ? StudentTabletLayout.dashboardMenuIconSize : 110,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: isTablet ? StudentTabletLayout.dashboardMenuLabelFontSize : 16,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Fredoka',
-                    color: Colors.white,
-                    shadows: const [
-                      // Shadow gelap tebal supaya
-                      // tidak silau dengan background
-                      Shadow(
-                        blurRadius: 8,
-                        color: Colors.black87,
-                        offset: Offset(2, 2),
+    return AnimatedBuilder(
+      animation: Listenable.merge([entranceAnim, _breatheController]),
+      builder: (context, child) {
+        // Fase 90 derajat per index kartu agar pergerakan mengembang-mengempis tenang & bergantian
+        final phase = index * (math.pi / 2);
+        final cycle = math.sin((_breatheController.value * 2 * math.pi) + phase);
+        final breatheScale = 1.0 + (0.045 * cycle); // Mengembang 1.045, mengempis 0.955 dengan ritme santai
+
+        return Opacity(
+          opacity: entranceAnim.value.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, (1 - entranceAnim.value) * 35),
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                return GestureDetector(
+                  onTapDown: (_) => setState(() => isPressed = true),
+                  onTapUp: (_) {
+                    setState(() => isPressed = false);
+                    onTap();
+                  },
+                  onTapCancel: () => setState(() => isPressed = false),
+                  child: Transform.scale(
+                    scale: breatheScale,
+                    child: AnimatedScale(
+                      scale: isPressed ? 1.15 : 1.0,
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutCubic,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            icon,
+                            width: isTablet ? StudentTabletLayout.dashboardMenuIconSize : 110,
+                            height: isTablet ? StudentTabletLayout.dashboardMenuIconSize : 110,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            label,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: isTablet ? StudentTabletLayout.dashboardMenuLabelFontSize : 16,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Fredoka',
+                              color: Colors.white,
+                              shadows: const [
+                                // Shadow gelap tebal supaya
+                                // tidak silau dengan background
+                                Shadow(
+                                  blurRadius: 8,
+                                  color: Colors.black87,
+                                  offset: Offset(2, 2),
+                                ),
+                                Shadow(
+                                  blurRadius: 8,
+                                  color: Colors.black87,
+                                  offset: Offset(-2, -2),
+                                ),
+                                Shadow(
+                                  blurRadius: 8,
+                                  color: Colors.black87,
+                                  offset: Offset(2, -2),
+                                ),
+                                Shadow(
+                                  blurRadius: 8,
+                                  color: Colors.black87,
+                                  offset: Offset(-2, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      Shadow(
-                        blurRadius: 8,
-                        color: Colors.black87,
-                        offset: Offset(-2, -2),
-                      ),
-                      Shadow(
-                        blurRadius: 8,
-                        color: Colors.black87,
-                        offset: Offset(2, -2),
-                      ),
-                      Shadow(
-                        blurRadius: 8,
-                        color: Colors.black87,
-                        offset: Offset(-2, 2),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         );
@@ -314,7 +367,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ),
                       ),
                     ),
-                    // Avatar profil
+                    // Avatar profil (statis tanpa animasi)
                     Positioned(
                       left: 0,
                       top: isTablet ? StudentTabletLayout.dashboardAvatarTopOffset : -8,
@@ -385,6 +438,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       icon: AppImages.icLearnLetter,
                       label: 'Belajar Huruf',
                       isTablet: isTablet,
+                      index: 0,
                       onTap: () async {
                         await context.push('/learn-letter');
                         if (mounted) {
@@ -396,6 +450,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       icon: AppImages.icSpellWord,
                       label: 'Mengeja Kata',
                       isTablet: isTablet,
+                      index: 1,
                       onTap: () async {
                         await context.push('/select-objek');
                         if (mounted) {
@@ -407,6 +462,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       icon: AppImages.icGame,
                       label: 'Permainan',
                       isTablet: isTablet,
+                      index: 2,
                       onTap: () async {
                         await context.push('/stage-map');
                         if (mounted) {
@@ -418,6 +474,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       icon: AppImages.icMyProgress,
                       label: 'Progress Saya',
                       isTablet: isTablet,
+                      index: 3,
                       onTap: () async {
                         await context.push('/progress');
                         if (mounted) {
@@ -457,19 +514,39 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       Positioned(
                         bottom: isTablet ? StudentTabletLayout.navbarIconBottom : 18,
                         left: screenWidth * (isTablet ? StudentTabletLayout.navbarProfileLeftFactor : 0.15),
-                        child: GestureDetector(
-                          onTap: () async {
-                            await context.push('/profile');
-                            if (mounted) {
-                              AudioService().playBGM(AppAudio.bgmHome);
-                            }
-                          },
-                          child: Image.asset(
-                            AppImages.icProfileManDefault,
-                            width: isTablet ? StudentTabletLayout.navbarIconSize : 38,
-                            height: isTablet ? StudentTabletLayout.navbarIconSize : 38,
-                          ),
-                        ),
+                        child: () {
+                          bool isPressed = false;
+                          return StatefulBuilder(
+                            builder: (context, setState) {
+                              return GestureDetector(
+                                onTapDown: (_) =>
+                                    setState(() => isPressed = true),
+                                onTapUp: (_) async {
+                                  setState(() => isPressed = false);
+                                  await Future.delayed(
+                                      const Duration(milliseconds: 100));
+                                  if (context.mounted) {
+                                    await context.push('/profile');
+                                    if (mounted) {
+                                      AudioService().playBGM(AppAudio.bgmHome);
+                                    }
+                                  }
+                                },
+                                onTapCancel: () =>
+                                    setState(() => isPressed = false),
+                                child: AnimatedScale(
+                                  scale: isPressed ? 1.25 : 1.0,
+                                  duration: const Duration(milliseconds: 150),
+                                  child: Image.asset(
+                                    AppImages.icProfileManDefault,
+                                    width: isTablet ? StudentTabletLayout.navbarIconSize : 38,
+                                    height: isTablet ? StudentTabletLayout.navbarIconSize : 38,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        }(),
                       ),
                       
                       // Maskot tengah (menonjol ke atas)

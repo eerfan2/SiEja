@@ -108,7 +108,9 @@ class _SelectRoleScreenState extends State<SelectRoleScreen> {
                           bool isBatalPressed = false;
                           bool isKeluarPressed = false;
 
-                          return Row(
+                          return StatefulBuilder(
+                            builder: (context, setBtnState) {
+                              return Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               GestureDetector(
@@ -185,6 +187,8 @@ class _SelectRoleScreenState extends State<SelectRoleScreen> {
                                 ),
                               ),
                             ],
+                          );
+                            },
                           );
                         },
                       ),
